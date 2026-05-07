@@ -1,0 +1,206 @@
+package com.attendance.backend.service;
+
+import com.attendance.backend.dto.ScheduleDTO;
+import com.attendance.backend.entity.Schedule;
+import com.attendance.backend.exception.ResourceNotFoundException;
+import com.attendance.backend.repository.ScheduleRepository;
+import com.attendance.backend.repository.ClassRoomRepository;
+import com.attendance.backend.entity.ClassRoom;
+import com.attendance.backend.repository.TeacherRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+@Service
+public class ScheduleService {
+
+    private final ScheduleRepository scheduleRepository;
+    private final TeacherRepository teacherRepository;
+    private final ClassRoomRepository classRoomRepository;
+
+    public ScheduleService(ScheduleRepository scheduleRepository, 
+                          TeacherRepository teacherRepository,
+                          ClassRoomRepository classRoomRepository) {
+        this.scheduleRepository = scheduleRepository;
+        this.teacherRepository = teacherRepository;
+        this.classRoomRepository = classRoomRepository;
+    }
+
+    public List<ScheduleDTO> getAllSchedules() {
+        return scheduleRepository.findAll().stream()
+                .map(this::toDTO).toList();
+    }
+
+    public List<ScheduleDTO> getByClass(String classId) {
+        return scheduleRepository.findByClassId(classId).stream()
+                .map(this::toDTO).toList();
+    }
+
+    public List<ScheduleDTO> getByTeacher(String teacherId) {
+        return scheduleRepository.findByTeacherIdIgnoreCase(teacherId).stream()
+                .map(this::toDTO).toList();
+    }
+
+    /** Lịch dạy của giáo viên hôm nay */
+    public List<ScheduleDTO> getByTeacherAndDay(String teacherId, String dayOfWeek) {
+        return scheduleRepository.findByTeacherIdAndDayOfWeek(teacherId, dayOfWeek).stream()
+                .map(this::toDTO).toList();
+    }
+
+    public ScheduleDTO getById(String id) {
+        return toDTO(findOrThrow(id));
+    }
+
+    @Transactional
+    public ScheduleDTO create(ScheduleDTO dto) {
+        if (scheduleRepository.existsById(dto.getId())) {
+            throw new RuntimeException("Mã lịch đã tồn tại: " + dto.getId());
+        }
+
+        ensureClassExists(dto.getClassId());
+        validateSchedule(null, dto);
+        return toDTO(scheduleRepository.save(toEntity(dto)));
+    }
+
+    @Transactional
+    public ScheduleDTO update(String id, ScheduleDTO dto) {
+        ensureClassExists(dto.getClassId());
+        validateSchedule(id, dto);
+        Schedule schedule = findOrThrow(id);
+        schedule.setClassId(dto.getClassId());
+        schedule.setSubject(dto.getSubject());
+        schedule.setTeacherId(dto.getTeacherId());
+        schedule.setTeacherName(dto.getTeacherName());
+        schedule.setDayOfWeek(dto.getDayOfWeek());
+        schedule.setStartTime(dto.getStartTime());
+        schedule.setEndTime(dto.getEndTime());
+        schedule.setRoom(dto.getRoom());
+        return toDTO(scheduleRepository.save(schedule));
+    }
+
+    private int getDayValue(String day) {
+        if (day == null) return 1;
+        String d = day.toUpperCase().trim();
+        if (d.contains("2") || d.contains("MON")) return 1;
+        if (d.contains("3") || d.contains("TUE")) return 2;
+        if (d.contains("4") || d.contains("WED")) return 3;
+        if (d.contains("5") || d.contains("THU")) return 4;
+        if (d.contains("6") || d.contains("FRI")) return 5;
+        if (d.contains("7") || d.contains("SAT")) return 6;
+        if (d.contains("CN") || d.contains("SUN") || d.contains("NHẬT")) return 7;
+        return 1;
+    }
+
+    private static final java.time.format.DateTimeFormatter TIME_FORMATTER = 
+        java.time.format.DateTimeFormatter.ofPattern("[HH:mm][H:mm][HH:mm:ss]");
+
+    private void validateSchedule(String excludeId, ScheduleDTO dto) {
+        int dayVal = getDayValue(dto.getDayOfWeek());
+        String dayStr = switch(dayVal) {
+            case 1 -> "Thứ 2";
+            case 2 -> "Thứ 3";
+            case 3 -> "Thứ 4";
+            case 4 -> "Thứ 5";
+            case 5 -> "Thứ 6";
+            case 6 -> "Thứ 7";
+            case 7 -> "Chủ Nhật";
+            default -> "Thứ 2";
+        };
+        dto.setDayOfWeek(dayStr); 
+
+        java.time.LocalTime start = java.time.LocalTime.parse(dto.getStartTime(), TIME_FORMATTER);
+        java.time.LocalTime end = java.time.LocalTime.parse(dto.getEndTime(), TIME_FORMATTER);
+
+        if (start.isAfter(end) || start.equals(end)) {
+            throw new RuntimeException("Thời gian bắt đầu phải trước thời gian kết thúc");
+        }
+
+        List<Schedule> allSchedules = scheduleRepository.findAll();
+        String normalizedRoom = dto.getRoom() != null ? dto.getRoom().replaceAll("\\s+", "").toUpperCase() : "";
+        
+        for (Schedule s : allSchedules) {
+            if (s.getId().equals(excludeId) || s.getId().equals(dto.getId())) continue;
+            
+            if (getDayValue(s.getDayOfWeek()) != dayVal) continue;
+
+            try {
+                java.time.LocalTime sStart = java.time.LocalTime.parse(s.getStartTime(), TIME_FORMATTER);
+                java.time.LocalTime sEnd = java.time.LocalTime.parse(s.getEndTime(), TIME_FORMATTER);
+
+                if (start.isBefore(sEnd) && end.isAfter(sStart)) {
+                    // 1. Kiểm tra phòng
+                    String sRoom = s.getRoom() != null ? s.getRoom().replaceAll("\\s+", "").toUpperCase() : "";
+                    if (!normalizedRoom.isEmpty() && normalizedRoom.equals(sRoom)) {
+                        throw new RuntimeException("Xung đột: Phòng " + dto.getRoom() + " đã có lớp " + s.getSubject() + " (" + s.getClassId() + ") từ " + s.getStartTime() + " - " + s.getEndTime());
+                    }
+
+                    // 2. Kiểm tra giáo viên
+                    if (s.getTeacherId() != null && s.getTeacherId().equalsIgnoreCase(dto.getTeacherId())) {
+                        throw new RuntimeException("Xung đột: Giáo viên " + s.getTeacherName() + " đã có lịch dạy lớp " + s.getClassId() + " vào khung giờ này");
+                    }
+
+                    // 3. Kiểm tra lớp
+                    if (s.getClassId() != null && s.getClassId().equalsIgnoreCase(dto.getClassId())) {
+                        throw new RuntimeException("Xung đột: Lớp " + s.getClassId() + " đã có lịch học môn " + s.getSubject() + " vào khung giờ này");
+                    }
+                }
+            } catch (Exception e) {
+                // Ignore parse errors
+            }
+        }
+    }
+
+    @Transactional
+    public void delete(String id) {
+        findOrThrow(id);
+        scheduleRepository.deleteById(id);
+    }
+
+    private String ensureClassExists(String classId) {
+        if (classId == null || classId.trim().isEmpty()) {
+            return null;
+        }
+        
+        String trimmedId = classId.trim();
+        if (!classRoomRepository.existsById(trimmedId)) {
+            // Nếu không tồn tại, tự động tạo mới học phần này
+            ClassRoom newClass = new ClassRoom(trimmedId, trimmedId, "Tự động tạo từ Lịch học");
+            classRoomRepository.save(newClass);
+        }
+        return trimmedId;
+    }
+
+    private Schedule findOrThrow(String id) {
+        return scheduleRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lịch học: " + id));
+    }
+
+    private ScheduleDTO toDTO(Schedule s) {
+        return ScheduleDTO.builder()
+                .id(s.getId())
+                .classId(s.getClassId())
+                .subject(s.getSubject())
+                .teacherId(s.getTeacherId())
+                .teacherName(s.getTeacherName())
+                .dayOfWeek(s.getDayOfWeek())
+                .startTime(s.getStartTime())
+                .endTime(s.getEndTime())
+                .room(s.getRoom())
+                .build();
+    }
+
+    private Schedule toEntity(ScheduleDTO dto) {
+        return Schedule.builder()
+                .id(dto.getId())
+                .classId(dto.getClassId())
+                .subject(dto.getSubject())
+                .teacherId(dto.getTeacherId())
+                .teacherName(dto.getTeacherName())
+                .dayOfWeek(dto.getDayOfWeek())
+                .startTime(dto.getStartTime())
+                .endTime(dto.getEndTime())
+                .room(dto.getRoom())
+                .build();
+    }
+}

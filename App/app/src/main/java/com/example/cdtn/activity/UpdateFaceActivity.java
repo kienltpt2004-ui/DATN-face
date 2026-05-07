@@ -1,0 +1,125 @@
+package com.example.cdtn.activity;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.os.Bundle;
+import android.provider.MediaStore;
+import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.Toast;
+import android.Manifest;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
+import com.example.cdtn.R;
+import com.example.cdtn.api.ApiService;
+import com.example.cdtn.api.RetrofitClient;
+import com.example.cdtn.model.ApiResponse;
+import com.example.cdtn.model.FaceRequest;
+import com.example.cdtn.utils.ImageUtils;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+
+public class UpdateFaceActivity extends AppCompatActivity {
+    private static final int CAMERA_REQUEST = 100;
+
+    private Bitmap bitmap;
+    private ImageView imageView;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_update_face);
+        
+        imageView = findViewById(R.id.imageView);
+        Button btnCapture = findViewById(R.id.btnCapture);
+        Button btnUpdate = findViewById(R.id.btnUpdate);
+        
+        btnCapture.setOnClickListener(v -> openCamera());
+        btnUpdate.setOnClickListener(v -> updateFace());
+    }
+
+    private void openCamera() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 102);
+        } else {
+            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            startActivityForResult(intent, CAMERA_REQUEST);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 102 && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            openCamera();
+        } else {
+            Toast.makeText(this, "Cần cấp quyền camera để chụp ảnh", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == CAMERA_REQUEST && resultCode == Activity.RESULT_OK) {
+            bitmap = (Bitmap) data.getExtras().get("data");
+            imageView.setImageBitmap(bitmap);
+        }
+    }
+    
+    private void updateFace() {
+        if (bitmap == null) {
+            Toast.makeText(this, "Chưa chụp ảnh", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String base64 = ImageUtils.bitmapToBase64(bitmap);
+        FaceRequest request = new FaceRequest(base64);
+
+        ApiService apiService = RetrofitClient
+                .getClient(this)
+                .create(ApiService.class);
+
+        apiService.updateFace(request)
+                .enqueue(new Callback<ApiResponse<Object>>() {
+                    @Override
+                    public void onResponse(Call<ApiResponse<Object>> call,
+                                           Response<ApiResponse<Object>> response) {
+                        if (response.isSuccessful()) {
+                            Toast.makeText(UpdateFaceActivity.this,
+                                    "Cập nhật thành công",
+                                    Toast.LENGTH_SHORT).show();
+                            finish();
+                        } else {
+                            String errorMsg = "Lỗi hệ thống";
+                            try {
+                                if (response.errorBody() != null) {
+                                    String errorJson = response.errorBody().string();
+                                    if (errorJson.contains("\"message\":\"")) {
+                                        errorMsg = errorJson.split("\"message\":\"")[1].split("\"")[0];
+                                    }
+                                }
+                            } catch (Exception e) {}
+                            Toast.makeText(UpdateFaceActivity.this,
+                                    "Thất bại: " + errorMsg,
+                                    Toast.LENGTH_LONG).show();
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<ApiResponse<Object>> call,
+                                          Throwable t) {
+                        Toast.makeText(UpdateFaceActivity.this,
+                                t.getMessage(),
+                                Toast.LENGTH_SHORT).show();
+                    }
+                });
+    }
+}
