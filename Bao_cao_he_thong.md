@@ -26,7 +26,7 @@ Hệ thống Attendance AI là một nền tảng quản lý điểm danh tích 
 |---|---|---|---|
 | **Frontend (FE)** | React + Vite + TailwindCSS | :5173 | Giao diện Quản trị Web |
 | **Backend (BE)** | Spring Boot 3.2 + JPA | :8002 | API Server, xử lý nghiệp vụ |
-| **AI Service** | Python FastAPI + face_recognition | :8001 | Nhận diện khuôn mặt |
+| **AI Service** | Python Flask + face_recognition | :5000 | Nhận diện khuôn mặt |
 | **Mobile App** | Android (Kotlin/Java) | - | App sinh viên tự điểm danh |
 | **Database** | MySQL | :3306 | Lưu trữ dữ liệu |
 
@@ -55,8 +55,8 @@ Hệ thống Attendance AI là một nền tảng quản lý điểm danh tích 
        │              │
        ▼              ▼
 ┌──────────┐  ┌───────────────────────────┐
-│  MySQL   │  │  AI Service (FastAPI:8001) │
-│ Database │  │  /encode  │  /verify      │
+│  MySQL   │  │  AI Service (Flask:5000)  │
+│ Database │  │ /face/register│/face/verify│
 └──────────┘  └───────────────────────────┘
                           ▲
                           │ HTTP
@@ -98,9 +98,9 @@ Hệ thống Attendance AI là một nền tảng quản lý điểm danh tích 
 
 | Chức năng | Admin | Giáo viên | Sinh viên |
 |---|:---:|:---:|:---:|
-| Quản lý học sinh | ✅ CRUD | 👁️ Xem | ❌ |
+| Quản lý học sinh | ✅ CRUD |  Xem | ❌ |
 | Quản lý giáo viên | ✅ CRUD | ❌ | ❌ |
-| Quản lý học phần | ✅ CRUD | 👁️ Xem | ❌ |
+| Quản lý học phần | ✅ CRUD |  Xem | ❌ |
 | Tạo/Xóa lịch dạy | ✅ | ❌ | ❌ |
 | Điểm danh thủ công | ✅ | ✅ | ❌ |
 | Xem báo cáo | ✅ | ✅ (lớp mình) | ❌ |
@@ -262,7 +262,7 @@ Hệ thống Attendance AI là một nền tảng quản lý điểm danh tích 
 
 **Backend API:** `/api/face-attendance/*`  
 **Controller:** `FaceAttendanceController.java`  
-**AI Service:** `AI/main.py` (Python FastAPI - Port 8001)
+**AI Service:** `AIFacePython/face-service/app.py` (Python Flask - Port 5000)
 
 #### Bước 1: Đăng ký khuôn mặt (Một lần)
 ```
@@ -272,7 +272,7 @@ Hệ thống Attendance AI là một nền tảng quản lý điểm danh tích 
 [POST /api/students/me/face]  (Gửi ảnh base64)
            │
            ▼
-[BE gọi AI Service: POST http://localhost:8001/encode]
+[BE gọi AI Service: POST http://localhost:5000/face/register]
            │
            ▼
 [AI trả về: vector embedding 128 chiều]
@@ -293,10 +293,10 @@ Hệ thống Attendance AI là một nền tảng quản lý điểm danh tích 
 [BE: Kiểm tra thời gian (còn trong khung cho phép?)]
            │
            ▼
-[BE: Gọi AI /verify — so sánh ảnh hiện tại với embedding đã lưu]
+[BE: Gọi AI /face/verify — so sánh ảnh hiện tại với embedding đã lưu]
            │
      ┌─────┴──────┐
-   Không khớp   Khớp (distance ≤ 0.6)
+   Không khớp   Khớp (distance < 0.5)
      │               │
    Từ chối        [Kiểm tra GPS]
                       │
@@ -534,10 +534,10 @@ Hàm `getAutoColumnWidths(data)` tự động tính toán độ rộng tối ưu
 
 ### 1. AI Service (Python)
 ```bash
-cd AI/
+cd AIFacePython/face-service/
 pip install -r requirements.txt
-python main.py
-# Chạy tại: http://localhost:8001
+python app.py
+# Chạy tại: http://localhost:5000
 ```
 
 ### 2. Backend (Spring Boot)

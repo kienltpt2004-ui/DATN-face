@@ -13,7 +13,7 @@ import org.springframework.web.client.RestTemplate;
 @Service
 public class FaceRecognitionService {
 
-    @Value("${ai.service.url:https://face-api-production-fccc.up.railway.app}")
+    @Value("${ai.service.url}")
     private String aiServiceUrl;
 
     private final RestTemplate restTemplate = new RestTemplate();

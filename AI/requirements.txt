@@ -1,7 +1,0 @@
-fastapi
-uvicorn
-face_recognition
-numpy
-opencv-python-headless
-python-multipart
-python-dotenv
