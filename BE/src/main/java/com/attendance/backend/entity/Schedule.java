@@ -43,6 +43,9 @@ public class Schedule {
     @Column(length = 20)
     private String room;
 
+    @Column(name = "location_id", length = 20)
+    private String locationId;
+
     public String getId() {
         return id;
     }
@@ -115,10 +118,18 @@ public class Schedule {
         this.room = room;
     }
 
+    public String getLocationId() {
+        return locationId;
+    }
+
+    public void setLocationId(String locationId) {
+        this.locationId = locationId;
+    }
+
     public Schedule() {
     }
 
-    public Schedule(String id, String classId, String subject, String teacherId, String teacherName, String dayOfWeek, String startTime, String endTime, String room) {
+    public Schedule(String id, String classId, String subject, String teacherId, String teacherName, String dayOfWeek, String startTime, String endTime, String room, String locationId) {
         this.id = id;
         this.classId = classId;
         this.subject = subject;
@@ -128,6 +139,7 @@ public class Schedule {
         this.startTime = startTime;
         this.endTime = endTime;
         this.room = room;
+        this.locationId = locationId;
     }
 
     public static ScheduleBuilder builder() {
@@ -144,6 +156,7 @@ public class Schedule {
         private String startTime;
         private String endTime;
         private String room;
+        private String locationId;
 
         ScheduleBuilder() {
         }
@@ -193,8 +206,13 @@ public class Schedule {
             return this;
         }
 
+        public ScheduleBuilder locationId(String locationId) {
+            this.locationId = locationId;
+            return this;
+        }
+
         public Schedule build() {
-            return new Schedule(id, classId, subject, teacherId, teacherName, dayOfWeek, startTime, endTime, room);
+            return new Schedule(id, classId, subject, teacherId, teacherName, dayOfWeek, startTime, endTime, room, locationId);
         }
     }
 }

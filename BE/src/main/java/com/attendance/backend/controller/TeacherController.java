@@ -36,6 +36,12 @@ public class TeacherController {
         return ResponseEntity.status(HttpStatus.CREATED).body(teacherService.createTeacher(dto));
     }
 
+    @PostMapping("/bulk")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<TeacherDTO>> createBulk(@RequestBody List<TeacherDTO> dtos) {
+        return ResponseEntity.ok(teacherService.createTeachersBulk(dtos));
+    }
+
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<TeacherDTO> update(@PathVariable String id, @RequestBody TeacherDTO dto) {

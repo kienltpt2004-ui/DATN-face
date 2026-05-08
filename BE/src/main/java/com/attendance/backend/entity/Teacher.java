@@ -19,6 +19,9 @@ public class Teacher {
     @Column(length = 20)
     private String phone;
 
+    @Column(length = 10)
+    private String gender;
+
     /** Lớp chủ nhiệm (nếu có) */
     @Column(name = "assigned_class", length = 20)
     private String assignedClass;
@@ -36,11 +39,12 @@ public class Teacher {
     public Teacher() {
     }
 
-    public Teacher(String id, String name, String email, String phone, Boolean isActive, Long userId) {
+    public Teacher(String id, String name, String email, String phone, String gender, Boolean isActive, Long userId) {
         this.id = id;
         this.name = name;
         this.email = email;
         this.phone = phone;
+        this.gender = gender;
         this.isActive = isActive;
         this.userId = userId;
     }
@@ -81,6 +85,14 @@ public class Teacher {
         this.phone = phone;
     }
 
+    public String getGender() {
+        return gender;
+    }
+
+    public void setGender(String gender) {
+        this.gender = gender;
+    }
+
     public Boolean getIsActive() {
         return isActive;
     }
@@ -102,6 +114,7 @@ public class Teacher {
         private String name;
         private String email;
         private String phone;
+        private String gender;
         private Boolean isActive = true;
         private Long userId;
 
@@ -128,6 +141,11 @@ public class Teacher {
             return this;
         }
 
+        public TeacherBuilder gender(String gender) {
+            this.gender = gender;
+            return this;
+        }
+
         public TeacherBuilder isActive(Boolean isActive) {
             this.isActive = isActive;
             return this;
@@ -139,7 +157,7 @@ public class Teacher {
         }
 
         public Teacher build() {
-            return new Teacher(id, name, email, phone, isActive, userId);
+            return new Teacher(id, name, email, phone, gender, isActive, userId);
         }
     }
 }

@@ -49,6 +49,12 @@ public class TeacherService {
         if (teacherRepository.existsById(dto.getId())) {
             throw new RuntimeException("Mã giáo viên đã tồn tại: " + dto.getId());
         }
+        if (dto.getEmail() != null && !dto.getEmail().isEmpty() && teacherRepository.existsByEmail(dto.getEmail())) {
+            throw new RuntimeException("Email đã được sử dụng bởi giáo viên khác: " + dto.getEmail());
+        }
+        if (dto.getPhone() != null && !dto.getPhone().isEmpty() && teacherRepository.existsByPhone(dto.getPhone())) {
+            throw new RuntimeException("Số điện thoại đã được sử dụng bởi giáo viên khác: " + dto.getPhone());
+        }
 
         // Tạo tài khoản user cho giáo viên
         User user = User.builder()
@@ -67,6 +73,7 @@ public class TeacherService {
                 .name(dto.getName())
                 .email(dto.getEmail())
                 .phone(dto.getPhone())
+                .gender(dto.getGender())
                 .isActive(dto.getIsActive() != null ? dto.getIsActive() : true)
                 .userId(user.getId())
                 .build();
@@ -75,12 +82,26 @@ public class TeacherService {
     }
 
     @Transactional
+    public List<TeacherDTO> createTeachersBulk(List<TeacherDTO> dtos) {
+        return dtos.stream().map(this::createTeacher).toList();
+    }
+
+    @Transactional
     public TeacherDTO updateTeacher(String id, TeacherDTO dto) {
         Teacher teacher = findOrThrow(id);
+
+        // Validate trùng email/sđt của người khác
+        if (dto.getEmail() != null && !dto.getEmail().isEmpty() && !dto.getEmail().equals(teacher.getEmail()) && teacherRepository.existsByEmail(dto.getEmail())) {
+            throw new RuntimeException("Email đã được sử dụng bởi giáo viên khác: " + dto.getEmail());
+        }
+        if (dto.getPhone() != null && !dto.getPhone().isEmpty() && !dto.getPhone().equals(teacher.getPhone()) && teacherRepository.existsByPhone(dto.getPhone())) {
+            throw new RuntimeException("Số điện thoại đã được sử dụng bởi giáo viên khác: " + dto.getPhone());
+        }
 
         teacher.setName(dto.getName());
         teacher.setEmail(dto.getEmail());
         teacher.setPhone(dto.getPhone());
+        teacher.setGender(dto.getGender());
         if (dto.getIsActive() != null) {
             teacher.setIsActive(dto.getIsActive());
         }
@@ -140,6 +161,7 @@ public class TeacherService {
                 .name(t.getName())
                 .email(t.getEmail())
                 .phone(t.getPhone())
+                .gender(t.getGender())
                 .isActive(t.getIsActive())
                 .build();
     }

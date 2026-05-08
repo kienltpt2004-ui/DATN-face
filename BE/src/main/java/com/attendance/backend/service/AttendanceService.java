@@ -31,15 +31,18 @@ public class AttendanceService {
     private final AttendanceRecordRepository attendanceRepo;
     private final StudentRepository studentRepository;
     private final com.attendance.backend.repository.ScheduleRepository scheduleRepository;
+    private final com.attendance.backend.repository.LocationRepository locationRepository;
     private final FaceRecognitionService faceRecognitionService;
 
     public AttendanceService(AttendanceRecordRepository attendanceRepo, 
                             StudentRepository studentRepository,
                             com.attendance.backend.repository.ScheduleRepository scheduleRepository,
+                            com.attendance.backend.repository.LocationRepository locationRepository,
                             FaceRecognitionService faceRecognitionService) {
         this.attendanceRepo = attendanceRepo;
         this.studentRepository = studentRepository;
         this.scheduleRepository = scheduleRepository;
+        this.locationRepository = locationRepository;
         this.faceRecognitionService = faceRecognitionService;
     }
 
@@ -103,7 +106,8 @@ public class AttendanceService {
                 .map(s -> s.getStartTime() + " - " + s.getEndTime())
                 .reduce((a, b) -> a + ", " + b).orElse("");
             logger.warn("Attendance denied: Outside scheduled time. Now: {}, Allowed: {}", now, timeInfo);
-            throw new RuntimeException("Hiện tại (" + now.format(DateTimeFormatter.ofPattern("HH:mm")) + ") nằm ngoài khung giờ học của học phần này (" + timeInfo + "). Hệ thống cho phép điểm danh sớm hoặc muộn tối đa 30 phút.");
+            // Vẫn cho phép giáo viên điểm danh nhưng sẽ có log cảnh báo nếu cần
+            // Ở đây ta có thể nới lỏng hơn cho Giáo viên: ví dụ cho phép cả ngày hôm đó.
         }
 
         List<AttendanceRecord> saved = new ArrayList<>();
@@ -140,7 +144,24 @@ public class AttendanceService {
             }
 
             record.setStatus(status);
+            
+            // Logic mới: Tự động tính trạng thái dựa trên thời gian nếu GV chọn 'present'
             if (status == AttendanceRecord.AttendanceStatus.present) {
+                com.attendance.backend.entity.Schedule sched = daySchedules.stream()
+                        .filter(s -> s.getId().equals(request.getScheduleId()))
+                        .findFirst().orElse(null);
+                if (sched != null) {
+                    LocalTime startTime = LocalTime.parse(sched.getStartTime(), TIME_FORMATTER);
+                    LocalTime nowTime = LocalTime.now();
+                    
+                    if (nowTime.isAfter(startTime.plusMinutes(30))) {
+                        record.setStatus(AttendanceRecord.AttendanceStatus.half);
+                        record.setNote("Ghi nhận sau 30p - Tính nửa buổi");
+                    } else if (nowTime.isAfter(startTime.plusMinutes(15))) {
+                        record.setStatus(AttendanceRecord.AttendanceStatus.late);
+                        record.setNote("Ghi nhận sau 15p - Tính muộn");
+                    }
+                }
                 record.setCheckInTime(LocalTime.now());
             }
             saved.add(attendanceRepo.save(record));
@@ -185,7 +206,10 @@ public class AttendanceService {
         }
         
         long present = attendanceRepo.countByStatusAndStudentAndDateRange(studentId, AttendanceRecord.AttendanceStatus.present, from, to);
-        double rate = Math.round((double) present / total * 1000.0) / 10.0;
+        long half = attendanceRepo.countByStatusAndStudentAndDateRange(studentId, AttendanceRecord.AttendanceStatus.half, from, to);
+        
+        double totalPresentValue = (double) present + (half * 0.5);
+        double rate = Math.round(totalPresentValue / total * 1000.0) / 10.0;
         double absenceRate = 100.0 - rate;
         
         String alertLevel = "NONE";
@@ -219,8 +243,8 @@ public class AttendanceService {
     }
 
     @Transactional
-    public AttendanceRecordDTO checkin(String studentId, String scheduleId, String base64Image) {
-        logger.info("[DEBUG] Bắt đầu Check-in cho SV: {} | Lịch dạy: {}", studentId, scheduleId);
+    public AttendanceRecordDTO checkin(String studentId, String scheduleId, String base64Image, Double userLat, Double userLng) {
+        logger.info("[DEBUG] Bắt đầu Check-in cho SV: {} | Lịch dạy: {} | GPS: {}, {}", studentId, scheduleId, userLat, userLng);
         
         Student student = studentRepository.findById(studentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sinh viên"));
@@ -251,6 +275,25 @@ public class AttendanceService {
             throw new RuntimeException("Đã điểm danh rồi");
         }
 
+        // Ràng buộc GPS: Nếu lịch học có liên kết Location, kiểm tra khoảng cách
+        if (schedule.getLocationId() != null && !schedule.getLocationId().isEmpty()) {
+            com.attendance.backend.entity.Location loc = locationRepository.findById(schedule.getLocationId())
+                    .orElse(null);
+            
+            if (loc != null && loc.getIsActive()) {
+                if (userLat == null || userLng == null) {
+                    throw new RuntimeException("Vui lòng bật GPS để điểm danh");
+                }
+                
+                double distance = calculateDistance(userLat, userLng, loc.getLat(), loc.getLng());
+                logger.info("[DEBUG] Khoảng cách: {}m | Bán kính cho phép: {}m", distance, loc.getRadius());
+                
+                if (distance > loc.getRadius()) {
+                    throw new RuntimeException("Bạn đang đứng ngoài phạm vi điểm danh cho phép (Cách " + Math.round(distance) + "m)");
+                }
+            }
+        }
+
         try {
             logger.info("[DEBUG] Đang gửi ảnh đi xác thực khuôn mặt...");
             Map<String, Object> faceRes = faceRecognitionService.verifyFace(base64Image, student.getFaceEmbedding());
@@ -271,14 +314,18 @@ public class AttendanceService {
         LocalTime startTime = LocalTime.parse(schedule.getStartTime(), TIME_FORMATTER);
         LocalTime endTime = LocalTime.parse(schedule.getEndTime(), TIME_FORMATTER);
 
-        if (now.isAfter(endTime.plusMinutes(30))) {
-            logger.warn("[DEBUG] Điểm danh thất bại: Đã quá giờ kết thúc lớp ({}). Giờ hiện tại: {}", endTime, now);
-            throw new RuntimeException("Đã quá thời gian điểm danh (lớp đã kết thúc)");
+        if (now.isAfter(startTime.plusMinutes(30))) {
+            logger.warn("[DEBUG] Điểm danh thất bại: Đã quá 30 phút kể từ khi bắt đầu ({}). Giờ hiện tại: {}", startTime, now);
+            throw new RuntimeException("Đã quá thời gian tự điểm danh (vượt quá 30 phút)");
         }
 
         AttendanceRecord.AttendanceStatus status = now.isAfter(startTime.plusMinutes(15))
                 ? AttendanceRecord.AttendanceStatus.late
                 : AttendanceRecord.AttendanceStatus.present;
+        
+        if (now.isBefore(startTime)) {
+             throw new RuntimeException("Chưa đến thời gian điểm danh (Tiết học chưa bắt đầu)");
+        }
 
         AttendanceRecord record = AttendanceRecord.builder()
                 .studentId(studentId)
@@ -329,8 +376,8 @@ public class AttendanceService {
             try {
                 LocalTime startTime = LocalTime.parse(s.getStartTime(), TIME_FORMATTER);
                 LocalTime endTime = LocalTime.parse(s.getEndTime(), TIME_FORMATTER);
-                LocalTime startLimit = startTime.minusMinutes(30);
-                LocalTime endLimit = endTime.plusMinutes(30);
+                LocalTime startLimit = startTime.minusMinutes(15); // Mở lớp trước 15p để SV thấy
+                LocalTime endLimit = startTime.plusMinutes(30);  // Khóa sau 30p
                 boolean isMatch = !now.isBefore(startLimit) && !now.isAfter(endLimit);
                 
                 logger.info("[DEBUG] Kiểm tra môn {}: {} - {}. Khung giờ cho phép: {} - {}. Kết quả: {}", 
@@ -347,6 +394,20 @@ public class AttendanceService {
 
         logger.info("[DEBUG] KẾT THÚC: Hiển thị {} lớp lên App.", result.size());
         return result;
+    }
+
+    /**
+     * Tính khoảng cách giữa 2 điểm GPS (đơn vị: mét) sử dụng công thức Haversine
+     */
+    private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+        final int R = 6371; // Bán kính Trái Đất (km)
+        double latDistance = Math.toRadians(lat2 - lat1);
+        double lonDistance = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c * 1000; // Trả về mét
     }
 
 }

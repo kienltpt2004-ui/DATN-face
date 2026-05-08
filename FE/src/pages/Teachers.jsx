@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../utils/api';
-import { UserPlus, Search, Edit2, Trash2, Mail, Phone, BookOpen, X, Check } from 'lucide-react';
+import { UserPlus, Search, Edit2, Trash2, Mail, Phone, BookOpen, X, Check, Upload, FileSpreadsheet } from 'lucide-react';
+import { parseExcel } from '../utils/excelImport';
 
 export function Teachers() {
     const [teachersList, setTeachersList] = useState([]);
@@ -9,7 +10,7 @@ export function Teachers() {
     const [searchTerm, setSearchTerm] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [editingTeacher, setEditingTeacher] = useState(null);
-    const [formData, setFormData] = useState({ name: '', id: '', email: '', phone: '' });
+    const [formData, setFormData] = useState({ name: '', id: '', email: '', phone: '', gender: 'Nam' });
 
     useEffect(() => {
         fetchTeachers();
@@ -77,13 +78,39 @@ export function Teachers() {
     };
 
     const handleDelete = async (id) => {
-        if (confirm('Bạn có chắc chắn muốn xóa giáo viên này?')) {
+        if (window.confirm('Bạn có chắc chắn muốn xóa giáo viên này?')) {
             try {
                 await api.delete(`/teachers/${id}`);
                 setTeachersList(teachersList.filter(t => t.id !== id));
             } catch (error) {
                 alert('Lỗi khi xóa: ' + error.message);
             }
+        }
+    };
+
+    const handleImport = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const mapping = {
+            'Mã GV': 'id',
+            'Họ và tên': 'name',
+            'Email': 'email',
+            'Số điện thoại': 'phone',
+            'Giới tính': 'gender'
+        };
+
+        setLoading(true);
+        try {
+            const data = await parseExcel(file, mapping);
+            await api.post('/teachers/bulk', data);
+            alert('Import thành công ' + data.length + ' giáo viên');
+            fetchTeachers();
+        } catch (error) {
+            alert('Lỗi Import: ' + error.message);
+        } finally {
+            setLoading(false);
+            e.target.value = null;
         }
     };
 
@@ -107,12 +134,18 @@ export function Teachers() {
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <button
-                    className="btn-primary flex items-center gap-2 whitespace-nowrap"
-                    onClick={() => { setEditingTeacher(null); setFormData({ name: '', id: '', email: '', phone: '' }); setShowModal(true); }}
-                >
-                    <UserPlus size={18} /> Thêm giáo viên
-                </button>
+                <div className="flex gap-2">
+                    <label className="btn-secondary border-indigo-200 text-indigo-600 hover:bg-indigo-50 cursor-pointer flex items-center gap-2">
+                        <Upload size={18} /> Import Excel
+                        <input type="file" className="hidden" accept=".xlsx, .xls" onChange={handleImport} />
+                    </label>
+                    <button
+                        className="btn-primary flex items-center gap-2 whitespace-nowrap"
+                        onClick={() => { setEditingTeacher(null); setFormData({ name: '', id: '', email: '', phone: '', gender: 'Nam' }); setShowModal(true); }}
+                    >
+                        <UserPlus size={18} /> Thêm giáo viên
+                    </button>
+                </div>
             </div>
 
             {/* Table */}
@@ -127,6 +160,7 @@ export function Teachers() {
                         <tr>
                             <th className="px-6 py-4">Giáo viên</th>
                             <th className="px-6 py-4">Mã GV</th>
+                            <th className="px-6 py-4">Giới tính</th>
                             <th className="px-6 py-4">Liên hệ</th>
                             <th className="px-6 py-4 text-right">Thao tác</th>
                         </tr>
@@ -143,6 +177,11 @@ export function Teachers() {
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 text-gray-500 font-mono text-xs">{teacher.id}</td>
+                                <td className="px-6 py-4">
+                                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${teacher.gender === 'Nữ' ? 'bg-pink-100 text-pink-600' : 'bg-blue-100 text-blue-600'}`}>
+                                        {teacher.gender || 'Nam'}
+                                    </span>
+                                </td>
                                 <td className="px-6 py-4 space-y-1">
                                     <div className="flex items-center gap-2 text-xs text-gray-600">
                                         <Mail size={12} className="text-gray-400" />
@@ -188,6 +227,13 @@ export function Teachers() {
                                 <div>
                                     <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Mã giáo viên</label>
                                     <input required className="input" value={formData.id} onChange={e => setFormData({ ...formData, id: e.target.value })} disabled={!!editingTeacher} />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Giới tính</label>
+                                    <select className="input" value={formData.gender || 'Nam'} onChange={e => setFormData({ ...formData, gender: e.target.value })}>
+                                        <option value="Nam">Nam</option>
+                                        <option value="Nữ">Nữ</option>
+                                    </select>
                                 </div>
 
                                 <div className="col-span-2">

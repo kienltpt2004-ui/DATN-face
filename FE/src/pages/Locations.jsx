@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../utils/api';
-import { Plus, Search, Edit2, Trash2, MapPin, Navigation, X, Check, Activity } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, MapPin, Navigation, X, Check, Activity, Target, Globe } from 'lucide-react';
 
 export function Locations() {
     const [locationsList, setLocationsList] = useState([]);
@@ -34,16 +34,53 @@ export function Locations() {
     const handleSave = async (e) => {
         e.preventDefault();
         try {
+            // Đảm bảo lat/lng là số
+            const data = {
+                ...formData,
+                lat: parseFloat(formData.lat),
+                lng: parseFloat(formData.lng),
+                radius: parseInt(formData.radius)
+            };
             if (editingLoc) {
-                await api.put(`/locations/${editingLoc.id}`, formData);
+                await api.put(`/locations/${editingLoc.id}`, data);
             } else {
-                await api.post('/locations', formData);
+                await api.post('/locations', data);
             }
             fetchLocations();
             setShowModal(false);
             setEditingLoc(null);
         } catch (err) {
             alert('Lỗi: ' + err.message);
+        }
+    };
+
+    const handleSearchAddress = async () => {
+        if (!formData.address) return;
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(formData.address)}`);
+            const data = await res.json();
+            if (data && data.length > 0) {
+                const { lat, lon } = data[0];
+                setFormData(prev => ({ ...prev, lat: parseFloat(lat), lng: parseFloat(lon) }));
+            } else {
+                alert('Không tìm thấy địa chỉ này');
+            }
+        } catch (err) {
+            console.error('Geocoding error:', err);
+        }
+    };
+
+    const handleGetCurrentLocation = () => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition((position) => {
+                setFormData(prev => ({
+                    ...prev,
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude
+                }));
+            }, (err) => {
+                alert('Không thể lấy vị trí: ' + err.message);
+            });
         }
     };
 
@@ -141,12 +178,12 @@ export function Locations() {
 
             {showModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden">
-                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                    <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 flex-shrink-0">
                             <h3 className="text-xl font-bold text-gray-800">Cấu hình vị trí điểm danh (GPS)</h3>
                             <button onClick={() => setShowModal(false)} className="hover:bg-white p-2 rounded-xl transition-all shadow-sm"><X /></button>
                         </div>
-                        <form onSubmit={handleSave} className="p-8 space-y-5">
+                        <form onSubmit={handleSave} className="p-8 space-y-5 overflow-y-auto custom-scrollbar">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="col-span-2">
                                     <label className="block text-sm font-bold text-gray-600 mb-2">Mã vị trí (ID)</label>
@@ -157,9 +194,29 @@ export function Locations() {
                                     <input required placeholder="VD: Trường THPT Chuyên" className="input" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
                                 </div>
                                 <div className="col-span-2">
-                                    <label className="block text-sm font-bold text-gray-600 mb-2">Địa chỉ chi tiết</label>
-                                    <input required placeholder="VD: 123 Đường ABC, Hà Nội" className="input" value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} />
+                                    <label className="block text-sm font-bold text-gray-600 mb-2">Tìm & Chọn địa chỉ</label>
+                                    <div className="flex gap-2 mb-4">
+                                        <input 
+                                            placeholder="Nhập địa chỉ để tìm trên bản đồ..." 
+                                            className="input flex-1" 
+                                            value={formData.address} 
+                                            onChange={e => setFormData({ ...formData, address: e.target.value })} 
+                                        />
+                                        <button type="button" onClick={handleSearchAddress} className="btn-secondary px-4"><Globe size={18} /></button>
+                                        <button type="button" onClick={handleGetCurrentLocation} className="btn-secondary px-4 text-emerald-600" title="Lấy vị trí hiện tại"><Target size={18} /></button>
+                                    </div>
+                                    
+                                    {/* Bản đồ */}
+                                    <div className="h-64 rounded-2xl overflow-hidden border border-gray-200 mb-4 bg-gray-50 relative group">
+                                        <MapPicker 
+                                            lat={formData.lat} 
+                                            lng={formData.lng} 
+                                            radius={formData.radius}
+                                            onChange={(lat, lng) => setFormData(prev => ({ ...prev, lat, lng }))}
+                                        />
+                                    </div>
                                 </div>
+                                
                                 <div>
                                     <label className="block text-sm font-bold text-gray-600 mb-2">Vĩ độ (Lat)</label>
                                     <input required type="number" step="0.000001" className="input" value={formData.lat} onChange={e => setFormData({ ...formData, lat: parseFloat(e.target.value) })} />
@@ -192,5 +249,43 @@ export function Locations() {
             )}
         </div>
     );
+}
+
+function MapPicker({ lat, lng, radius, onChange }) {
+    const mapRef = useRef(null);
+    const markerRef = useRef(null);
+    const circleRef = useRef(null);
+
+    useEffect(() => {
+        if (!window.L) return;
+        
+        if (!mapRef.current) {
+            mapRef.current = L.map('map-picker').setView([lat, lng], 15);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(mapRef.current);
+
+            markerRef.current = L.marker([lat, lng], { draggable: true }).addTo(mapRef.current);
+            circleRef.current = L.circle([lat, lng], { radius: radius, color: '#10b981', fillOpacity: 0.2 }).addTo(mapRef.current);
+
+            markerRef.current.on('dragend', () => {
+                const pos = markerRef.current.getLatLng();
+                onChange(pos.lat, pos.lng);
+            });
+
+            mapRef.current.on('click', (e) => {
+                markerRef.current.setLatLng(e.latlng);
+                onChange(e.latlng.lat, e.latlng.lng);
+            });
+        } else {
+            const center = [lat, lng];
+            mapRef.current.setView(center);
+            markerRef.current.setLatLng(center);
+            circleRef.current.setLatLng(center);
+            circleRef.current.setRadius(radius);
+        }
+    }, [lat, lng, radius]);
+
+    return <div id="map-picker" style={{ height: '100%', width: '100%' }} />;
 }
 

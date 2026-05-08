@@ -4,7 +4,7 @@ import { Check, X, Minus, Save, ShieldAlert, FileText, FileSpreadsheet } from 'l
 import { exportDailyAttendancePDF } from '../utils/pdfExport';
 import { exportDailyAttendanceExcel } from '../utils/excelExport';
 
-const STATUS_LABEL = { present: 'Có mặt', absent: 'Vắng', late: 'Muộn' };
+const STATUS_LABEL = { present: 'Có mặt', absent: 'Vắng', late: 'Muộn', half: 'Nửa buổi' };
 const todayStr = new Date().toISOString().split('T')[0];
 
 function StatusButton({ status, current, onClick, disabled }) {
@@ -12,6 +12,7 @@ function StatusButton({ status, current, onClick, disabled }) {
         present: `border-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${current === 'present' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-200 text-gray-500 hover:border-emerald-400 hover:text-emerald-600'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`,
         absent: `border-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${current === 'absent' ? 'bg-red-500 border-red-500 text-white' : 'border-gray-200 text-gray-500 hover:border-red-400 hover:text-red-600'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`,
         late: `border-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${current === 'late' ? 'bg-orange-500 border-orange-500 text-white' : 'border-gray-200 text-gray-500 hover:border-orange-400 hover:text-orange-600'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`,
+        half: `border-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${current === 'half' ? 'bg-indigo-500 border-indigo-500 text-white' : 'border-gray-200 text-gray-500 hover:border-indigo-400 hover:text-indigo-600'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`,
     };
     return (
         <button className={styles[status]} onClick={disabled ? null : onClick} disabled={disabled}>
@@ -80,14 +81,16 @@ export function Attendance({ user }) {
                 const currentMinutes = now.getHours() * 60 + now.getMinutes();
                 
                 const within = classSchedule.some(s => {
-                    const [sh, sm] = s.startTime.split(':').map(Number);
-                    const [eh, em] = s.endTime.split(':').map(Number);
-                    const startMin = sh * 60 + sm - 30; // 30p buffer
-                    const endMin = eh * 60 + em + 30;
-                    return currentMinutes >= startMin && currentMinutes <= endMin;
+                    const startMinForVisibility = sh * 60 + sm - 15; // Hiện lớp trước 15p
+                    const startMinForCheckin = sh * 60 + sm;      // Chỉ cho điểm danh từ lúc bắt đầu
+                    const endMin = sh * 60 + sm + 30;
+                    
+                    // Để hiện lớp trong danh sách: dùng startMinForVisibility
+                    // Nhưng để cho phép nút Lưu/Trạng thái: có thể dùng logic khác
+                    return currentMinutes >= startMinForVisibility;
                 });
                 
-                setIsWithinTime(within || isHistory); // Lịch sử thì luôn true để xem
+                setIsWithinTime(within || isHistory);
                 setScheduleInfo(classSchedule.map(s => `${s.startTime} - ${s.endTime}`).join(', '));
             } else {
                 setIsWithinTime(false);
@@ -149,7 +152,7 @@ export function Attendance({ user }) {
         }
     };
 
-    const counts = { present: 0, absent: 0, late: 0 };
+    const counts = { present: 0, absent: 0, late: 0, half: 0 };
     classStudents.forEach(s => counts[attendance[s.id]]++);
 
     return (
@@ -229,7 +232,8 @@ export function Attendance({ user }) {
                         <p className="text-xs opacity-80">
                             Thời gian hệ thống: <span className="font-bold">{new Date().toLocaleTimeString('vi-VN', {hour: '2-digit', minute: '2-digit'})}</span>. 
                             Khung giờ học: <span className="font-bold">{scheduleInfo}</span>. 
-                            Hệ thống chỉ mở điểm danh trong khung giờ này (±30 phút).
+                            <br/>
+                            <span className="text-[10px] font-bold opacity-70 italic">* Lưu ý: Lớp hiện sớm 15p, chỉ bắt đầu điểm danh khi đến giờ học. Sau 15p tính là Muộn, sau 30p tính là Nửa buổi.</span>
                         </p>
                     </div>
                 </div>
@@ -256,6 +260,10 @@ export function Attendance({ user }) {
                                 <div className="flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 rounded-full">
                                     <span className="w-1.5 h-1.5 bg-orange-500 rounded-full" />
                                     <span className="text-[11px] font-bold text-orange-700">{counts.late} Muộn</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 rounded-full">
+                                    <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full" />
+                                    <span className="text-[11px] font-bold text-indigo-700">{counts.half} Nửa buổi</span>
                                 </div>
                                 <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-50 rounded-full">
                                     <span className="w-1.5 h-1.5 bg-red-500 rounded-full" />
@@ -318,6 +326,7 @@ export function Attendance({ user }) {
                                             <div className="flex items-center justify-center gap-3">
                                                 <StatusButton status="present" current={attendance[s.id]} onClick={() => setStatus(s.id, 'present')} disabled={!canEdit} />
                                                 <StatusButton status="late" current={attendance[s.id]} onClick={() => setStatus(s.id, 'late')} disabled={!canEdit} />
+                                                <StatusButton status="half" current={attendance[s.id]} onClick={() => setStatus(s.id, 'half')} disabled={!canEdit} />
                                                 <StatusButton status="absent" current={attendance[s.id]} onClick={() => setStatus(s.id, 'absent')} disabled={!canEdit} />
                                             </div>
                                         </td>

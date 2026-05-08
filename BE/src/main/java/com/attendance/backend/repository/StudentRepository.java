@@ -33,4 +33,7 @@ public interface StudentRepository extends JpaRepository<Student, String> {
     // Fallback: tìm sinh viên qua bản ghi điểm danh khi student_classes chưa được cấu hình
     @Query("SELECT DISTINCT s FROM Student s WHERE s.id IN (SELECT a.studentId FROM AttendanceRecord a WHERE a.classId IN :classIds)")
     List<Student> findByAttendanceClassIds(@Param("classIds") java.util.List<String> classIds);
+
+    boolean existsByEmail(String email);
+    boolean existsByPhone(String phone);
 }

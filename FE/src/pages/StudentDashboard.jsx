@@ -62,11 +62,12 @@ export function StudentDashboard({ student, onLogout }) {
     }, [records, selectedClassId]);
 
     const stats = useMemo(() => {
-        if (!filteredRecords.length) return { present: 0, late: 0, absent: 0 };
+        if (!filteredRecords.length) return { present: 0, late: 0, absent: 0, half: 0 };
         const present = filteredRecords.filter(r => r.status.toLowerCase() === 'present').length;
         const late = filteredRecords.filter(r => r.status.toLowerCase() === 'late').length;
         const absent = filteredRecords.filter(r => r.status.toLowerCase() === 'absent').length;
-        return { present, late, absent };
+        const half = filteredRecords.filter(r => r.status.toLowerCase() === 'half').length;
+        return { present, late, absent, half };
     }, [filteredRecords]);
 
     const studentSubjects = useMemo(() => {
@@ -157,12 +158,12 @@ export function StudentDashboard({ student, onLogout }) {
                     </div>
                 ) : (
                     <>
-                        {/* Stats Grid */}
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                             <StatItem label="Tổng số buổi" value={filteredRecords.length} color="bg-blue-500" icon={Calendar} />
                             <StatItem label="Đúng giờ" value={stats.present} color="bg-emerald-500" icon={CheckCircle} />
-                            <StatItem label="Nghỉ học" value={stats.absent} color="bg-red-500" icon={XCircle} />
                             <StatItem label="Đi muộn" value={stats.late} color="bg-orange-500" icon={Clock} />
+                            <StatItem label="Nửa buổi" value={stats.half} color="bg-indigo-500" icon={Users} />
+                            <StatItem label="Nghỉ học" value={stats.absent} color="bg-red-500" icon={XCircle} />
                         </div>
 
                         {/* History Table */}
@@ -200,8 +201,10 @@ export function StudentDashboard({ student, onLogout }) {
                                                         <span className="badge-present px-4 py-1.5 rounded-full text-[10px] font-black uppercase">Có mặt</span>
                                                     ) : r.status.toLowerCase() === 'absent' ? (
                                                         <span className="badge-absent px-4 py-1.5 rounded-full text-[10px] font-black uppercase">Vắng mặt</span>
-                                                    ) : (
+                                                    ) : r.status.toLowerCase() === 'late' ? (
                                                         <span className="badge-late px-4 py-1.5 rounded-full text-[10px] font-black uppercase">Muộn</span>
+                                                    ) : (
+                                                        <span className="bg-indigo-100 text-indigo-700 px-4 py-1.5 rounded-full text-[10px] font-black uppercase">Nửa buổi</span>
                                                     )}
                                                 </td>
                                             </tr>

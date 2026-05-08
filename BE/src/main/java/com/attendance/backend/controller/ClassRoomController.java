@@ -87,6 +87,12 @@ public class ClassRoomController {
         return ResponseEntity.status(HttpStatus.CREATED).body(classRoomService.create(classRoom));
     }
 
+    @PostMapping("/bulk")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<ClassRoom>> createBulk(@RequestBody List<ClassRoom> classes) {
+        return ResponseEntity.ok(classRoomService.createClassesBulk(classes));
+    }
+
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ClassRoom> update(@PathVariable String id, @RequestBody ClassRoom classRoom) {

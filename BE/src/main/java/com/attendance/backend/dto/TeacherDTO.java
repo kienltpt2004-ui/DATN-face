@@ -5,16 +5,18 @@ public class TeacherDTO {
     private String name;
     private String email;
     private String phone;
+    private String gender;
     private Boolean isActive;
 
     public TeacherDTO() {
     }
 
-    public TeacherDTO(String id, String name, String email, String phone, Boolean isActive) {
+    public TeacherDTO(String id, String name, String email, String phone, String gender, Boolean isActive) {
         this.id = id;
         this.name = name;
         this.email = email;
         this.phone = phone;
+        this.gender = gender;
         this.isActive = isActive;
     }
 
@@ -54,6 +56,14 @@ public class TeacherDTO {
         this.phone = phone;
     }
 
+    public String getGender() {
+        return gender;
+    }
+
+    public void setGender(String gender) {
+        this.gender = gender;
+    }
+
     public Boolean getIsActive() {
         return isActive;
     }
@@ -67,6 +77,7 @@ public class TeacherDTO {
         private String name;
         private String email;
         private String phone;
+        private String gender;
         private Boolean isActive;
 
         TeacherDTOBuilder() {
@@ -92,13 +103,18 @@ public class TeacherDTO {
             return this;
         }
 
+        public TeacherDTOBuilder gender(String gender) {
+            this.gender = gender;
+            return this;
+        }
+
         public TeacherDTOBuilder isActive(Boolean isActive) {
             this.isActive = isActive;
             return this;
         }
 
         public TeacherDTO build() {
-            return new TeacherDTO(id, name, email, phone, isActive);
+            return new TeacherDTO(id, name, email, phone, gender, isActive);
         }
     }
 }

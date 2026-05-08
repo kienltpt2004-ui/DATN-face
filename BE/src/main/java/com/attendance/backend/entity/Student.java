@@ -45,6 +45,9 @@ public class Student {
     @Column(length = 20)
     private String phone;
 
+    @Column(length = 100)
+    private String email;
+
     @Column(length = 500)
     private String faceImagePath;
 
@@ -57,12 +60,13 @@ public class Student {
     public Student() {
     }
 
-    public Student(String id, String name, String gender, String dob, String phone, String faceImagePath, String faceEmbedding, Boolean isActive, Long userId) {
+    public Student(String id, String name, String gender, String dob, String phone, String email, String faceImagePath, String faceEmbedding, Boolean isActive, Long userId) {
         this.id = id;
         this.name = name;
         this.gender = gender;
         this.dob = dob;
         this.phone = phone;
+        this.email = email;
         this.faceImagePath = faceImagePath;
         this.faceEmbedding = faceEmbedding;
         this.isActive = isActive;
@@ -131,6 +135,14 @@ public class Student {
         this.phone = phone;
     }
 
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
     public String getFaceImagePath() {
         return faceImagePath;
     }
@@ -168,6 +180,7 @@ public class Student {
         private String gender;
         private String dob;
         private String phone;
+        private String email;
         private String faceImagePath;
         private String faceEmbedding;
         private Boolean isActive = true;
@@ -186,8 +199,6 @@ public class Student {
             return this;
         }
 
-
-
         public StudentBuilder gender(String gender) {
             this.gender = gender;
             return this;
@@ -200,6 +211,11 @@ public class Student {
 
         public StudentBuilder phone(String phone) {
             this.phone = phone;
+            return this;
+        }
+
+        public StudentBuilder email(String email) {
+            this.email = email;
             return this;
         }
 
@@ -224,7 +240,7 @@ public class Student {
         }
 
         public Student build() {
-            return new Student(id, name, gender, dob, phone, faceImagePath, faceEmbedding, isActive, userId);
+            return new Student(id, name, gender, dob, phone, email, faceImagePath, faceEmbedding, isActive, userId);
         }
     }
 }

@@ -8,6 +8,7 @@ function AttendanceBadge({ status }) {
     if (status?.toLowerCase() === 'present') return <span className="badge-present">P</span>;
     if (status?.toLowerCase() === 'absent') return <span className="badge-absent">V</span>;
     if (status?.toLowerCase() === 'late') return <span className="badge-late">M</span>;
+    if (status?.toLowerCase() === 'half') return <span className="bg-indigo-500 text-white px-1.5 py-0.5 rounded text-[10px] font-bold">1/2</span>;
     return <span className="text-gray-300">—</span>;
 }
 
@@ -72,13 +73,14 @@ export function Reports() {
             const present = studentRecords.filter(r => r.status.toLowerCase() === 'present').length;
             const absent = studentRecords.filter(r => r.status.toLowerCase() === 'absent').length;
             const late = studentRecords.filter(r => r.status.toLowerCase() === 'late').length;
+            const half = studentRecords.filter(r => r.status.toLowerCase() === 'half').length;
             
             // Tính số ngày có lịch học thực tế (dựa trên dữ liệu)
             const totalClassDays = uniqueDates.length;
-            const score = (present + (late * 0.8)); // Muộn tính 0.8 điểm chuyên cần
+            const score = present + (late * 0.8) + (half * 0.5); // Muộn 0.8, Nửa buổi 0.5
             const rate = totalClassDays ? Math.round((score / totalClassDays) * 100) : 0;
             
-            return { ...s, present, absent, late, total: totalClassDays, rate };
+            return { ...s, present, absent, late, half, total: totalClassDays, rate };
         });
     }, [students, records, uniqueDates]);
 
@@ -170,6 +172,7 @@ export function Reports() {
                                         <th className="text-center p-4">Có mặt</th>
                                         <th className="text-center p-4">Vắng</th>
                                         <th className="text-center p-4">Muộn</th>
+                                        <th className="text-center p-4">Nửa buổi</th>
                                         <th className="text-center p-4">Tỉ lệ (%)</th>
                                         <th className="text-left p-4 min-w-[200px]">Diễn biến</th>
                                     </tr>
@@ -191,6 +194,7 @@ export function Reports() {
                                             <td className="p-4 text-center font-bold text-emerald-600">{s.present}</td>
                                             <td className="p-4 text-center font-bold text-red-500">{s.absent}</td>
                                             <td className="p-4 text-center font-bold text-amber-500">{s.late}</td>
+                                            <td className="p-4 text-center font-bold text-indigo-500">{s.half}</td>
                                             <td className="p-4 text-center">
                                                 <div className="flex flex-col items-center">
                                                     <span className={`font-black text-base ${s.rate >= 85 ? 'text-emerald-600' : s.rate >= 80 ? 'text-amber-500' : 'text-red-600'}`}>
@@ -210,7 +214,8 @@ export function Reports() {
                                                         const color = !rec ? 'bg-gray-100'
                                                             : rec.status.toLowerCase() === 'present' ? 'bg-emerald-500'
                                                                 : rec.status.toLowerCase() === 'absent' ? 'bg-red-500'
-                                                                    : 'bg-amber-400';
+                                                                    : rec.status.toLowerCase() === 'late' ? 'bg-amber-400'
+                                                                        : 'bg-indigo-500';
                                                         return <div key={date} className={`flex-1 rounded-[1px] ${color}`} title={`${date}: ${rec?.status || 'Không học'}`} />;
                                                     })}
                                                 </div>

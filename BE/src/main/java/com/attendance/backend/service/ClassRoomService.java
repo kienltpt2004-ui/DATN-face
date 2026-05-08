@@ -59,6 +59,11 @@ public class ClassRoomService {
     }
 
     @Transactional
+    public List<ClassRoom> createClassesBulk(List<ClassRoom> classes) {
+        return classes.stream().map(this::create).toList();
+    }
+
+    @Transactional
     public ClassRoom update(String id, ClassRoom updated) {
         ClassRoom existing = getById(id);
         

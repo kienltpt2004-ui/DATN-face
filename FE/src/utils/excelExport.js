@@ -6,6 +6,20 @@ const STATUS_LABEL = {
     late: 'Muộn',
 };
 
+// Hàm tự động tính toán độ rộng cột dựa trên nội dung
+export const getAutoColumnWidths = (data) => {
+    if (!data || data.length === 0) return [];
+    const keys = Object.keys(data[0]);
+    return keys.map(key => {
+        let maxLen = key.toString().length;
+        data.forEach(row => {
+            const val = row[key] ? row[key].toString() : "";
+            if (val.length > maxLen) maxLen = val.length;
+        });
+        return { wch: maxLen + 2 }; // Thêm 2 ký tự đệm
+    });
+};
+
 /**
  * Xuất báo cáo điểm danh ngày ra Excel
  */
@@ -22,14 +36,8 @@ export function exportDailyAttendanceExcel({ className, date, students, attendan
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Điểm danh");
 
-    // Điều chỉnh độ rộng cột
-    ws['!cols'] = [
-        { wch: 5 },
-        { wch: 15 },
-        { wch: 25 },
-        { wch: 10 },
-        { wch: 15 },
-    ];
+    // Tự động điều chỉnh độ rộng cột
+    ws['!cols'] = getAutoColumnWidths(data);
 
     XLSX.writeFile(wb, `diemdanh_${className}_${date}.xlsx`);
 }
@@ -62,9 +70,7 @@ export function exportSemesterReportExcel({ className, students, records }) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Tổng hợp học kỳ");
 
-    ws['!cols'] = [
-        { wch: 5 }, { wch: 15 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 20 }
-    ];
+    ws['!cols'] = getAutoColumnWidths(data);
 
     XLSX.writeFile(wb, `tonghop_hocky_${className}.xlsx`);
 }
@@ -100,11 +106,7 @@ export function exportAttendanceRangeExcel({ className, fromDate, toDate, studen
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Chi tiết điểm danh");
 
-    ws['!cols'] = [
-        { wch: 5 }, { wch: 12 }, { wch: 25 }, 
-        ...dates.map(() => ({ wch: 12 })),
-        { wch: 8 }, { wch: 15 }
-    ];
+    ws['!cols'] = getAutoColumnWidths(data);
 
     XLSX.writeFile(wb, `baocao_chitiet_${className}_${fromDate}_to_${toDate}.xlsx`);
 }

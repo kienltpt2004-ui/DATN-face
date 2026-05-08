@@ -7,6 +7,7 @@ public class StudentDTO {
     private String gender;
     private String dob;
     private String phone;
+    private String email;
     private String faceImagePath;
     private String faceEmbedding;
     private Boolean isActive;
@@ -14,13 +15,14 @@ public class StudentDTO {
     public StudentDTO() {
     }
 
-    public StudentDTO(String id, String name, String classId, String gender, String dob, String phone, String faceImagePath, String faceEmbedding, Boolean isActive) {
+    public StudentDTO(String id, String name, String classId, String gender, String dob, String phone, String email, String faceImagePath, String faceEmbedding, Boolean isActive) {
         this.id = id;
         this.name = name;
         this.classId = classId;
         this.gender = gender;
         this.dob = dob;
         this.phone = phone;
+        this.email = email;
         this.faceImagePath = faceImagePath;
         this.faceEmbedding = faceEmbedding;
         this.isActive = isActive;
@@ -78,6 +80,14 @@ public class StudentDTO {
         this.phone = phone;
     }
 
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
     public String getFaceImagePath() {
         return faceImagePath;
     }
@@ -109,6 +119,7 @@ public class StudentDTO {
         private String gender;
         private String dob;
         private String phone;
+        private String email;
         private String faceImagePath;
         private String faceEmbedding;
         private Boolean isActive;
@@ -146,6 +157,11 @@ public class StudentDTO {
             return this;
         }
 
+        public StudentDTOBuilder email(String email) {
+            this.email = email;
+            return this;
+        }
+
         public StudentDTOBuilder faceImagePath(String faceImagePath) {
             this.faceImagePath = faceImagePath;
             return this;
@@ -162,7 +178,7 @@ public class StudentDTO {
         }
 
         public StudentDTO build() {
-            return new StudentDTO(id, name, classId, gender, dob, phone, faceImagePath, faceEmbedding, isActive);
+            return new StudentDTO(id, name, classId, gender, dob, phone, email, faceImagePath, faceEmbedding, isActive);
         }
     }
 }

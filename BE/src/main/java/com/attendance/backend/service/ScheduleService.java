@@ -76,6 +76,7 @@ public class ScheduleService {
         schedule.setStartTime(dto.getStartTime());
         schedule.setEndTime(dto.getEndTime());
         schedule.setRoom(dto.getRoom());
+        schedule.setLocationId(dto.getLocationId());
         return toDTO(scheduleRepository.save(schedule));
     }
 
@@ -121,33 +122,51 @@ public class ScheduleService {
         
         for (Schedule s : allSchedules) {
             if (s.getId().equals(excludeId) || s.getId().equals(dto.getId())) continue;
-            
             if (getDayValue(s.getDayOfWeek()) != dayVal) continue;
 
+            java.time.LocalTime sStart, sEnd;
             try {
-                java.time.LocalTime sStart = java.time.LocalTime.parse(s.getStartTime(), TIME_FORMATTER);
-                java.time.LocalTime sEnd = java.time.LocalTime.parse(s.getEndTime(), TIME_FORMATTER);
-
-                if (start.isBefore(sEnd) && end.isAfter(sStart)) {
-                    // 1. Kiểm tra phòng
-                    String sRoom = s.getRoom() != null ? s.getRoom().replaceAll("\\s+", "").toUpperCase() : "";
-                    if (!normalizedRoom.isEmpty() && normalizedRoom.equals(sRoom)) {
-                        throw new RuntimeException("Xung đột: Phòng " + dto.getRoom() + " đã có lớp " + s.getSubject() + " (" + s.getClassId() + ") từ " + s.getStartTime() + " - " + s.getEndTime());
-                    }
-
-                    // 2. Kiểm tra giáo viên
-                    if (s.getTeacherId() != null && s.getTeacherId().equalsIgnoreCase(dto.getTeacherId())) {
-                        throw new RuntimeException("Xung đột: Giáo viên " + s.getTeacherName() + " đã có lịch dạy lớp " + s.getClassId() + " vào khung giờ này");
-                    }
-
-                    // 3. Kiểm tra lớp
-                    if (s.getClassId() != null && s.getClassId().equalsIgnoreCase(dto.getClassId())) {
-                        throw new RuntimeException("Xung đột: Lớp " + s.getClassId() + " đã có lịch học môn " + s.getSubject() + " vào khung giờ này");
-                    }
-                }
-            } catch (Exception e) {
-                // Ignore parse errors
+                sStart = java.time.LocalTime.parse(s.getStartTime(), TIME_FORMATTER);
+                sEnd   = java.time.LocalTime.parse(s.getEndTime(),   TIME_FORMATTER);
+            } catch (Exception ignored) {
+                continue;
             }
+
+            // Chỉ kiểm tra nếu giờ học chồng lên nhau
+            boolean overlaps = start.isBefore(sEnd) && end.isAfter(sStart);
+            if (!overlaps) continue;
+
+            // Rule 1: Một lớp không được học 2 môn trong cùng 1 khung giờ
+            if (s.getClassId() != null && s.getClassId().equalsIgnoreCase(dto.getClassId())) {
+                throw new RuntimeException(
+                    "Xung đột lịch lớp: Lớp " + s.getClassId() +
+                    " đã có lịch học môn \"" + s.getSubject() +
+                    "\" vào " + dayStr + " từ " + s.getStartTime() + " đến " + s.getEndTime() +
+                    ". Vui lòng chọn khung giờ sau " + s.getEndTime() + "."
+                );
+            }
+
+            // Rule 2: Một giảng viên không được dạy 2 lớp trong cùng 1 khung giờ
+            if (s.getTeacherId() != null && s.getTeacherId().equalsIgnoreCase(dto.getTeacherId())) {
+                throw new RuntimeException(
+                    "Xung đột lịch giảng viên: Giảng viên \"" + s.getTeacherName() +
+                    "\" đã được xếp dạy lớp " + s.getClassId() +
+                    " vào " + dayStr + " từ " + s.getStartTime() + " đến " + s.getEndTime() +
+                    ". Một giảng viên không thể dạy 2 lớp cùng lúc."
+                );
+            }
+
+            // Rule 3: Một phòng không được dùng 2 lớp trong cùng 1 khung giờ (nếu có chỉ định phòng)
+            String sRoom = s.getRoom() != null ? s.getRoom().replaceAll("\\s+", "").toUpperCase() : "";
+            if (!normalizedRoom.isEmpty() && !sRoom.isEmpty() && normalizedRoom.equals(sRoom)) {
+                throw new RuntimeException(
+                    "Xung đột phòng học: Phòng " + dto.getRoom() +
+                    " đã được xếp cho lớp " + s.getClassId() +
+                    " vào " + dayStr + " từ " + s.getStartTime() + " đến " + s.getEndTime() + "."
+                );
+            }
+
+            // Cho phép: khác lớp + khác giảng viên + khác phòng → OK dù cùng khung giờ
         }
     }
 
@@ -187,6 +206,7 @@ public class ScheduleService {
                 .startTime(s.getStartTime())
                 .endTime(s.getEndTime())
                 .room(s.getRoom())
+                .locationId(s.getLocationId())
                 .build();
     }
 
@@ -201,6 +221,7 @@ public class ScheduleService {
                 .startTime(dto.getStartTime())
                 .endTime(dto.getEndTime())
                 .room(dto.getRoom())
+                .locationId(dto.getLocationId())
                 .build();
     }
 }

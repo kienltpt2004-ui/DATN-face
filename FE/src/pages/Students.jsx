@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 import { exportStudentListPDF } from '../utils/pdfExport';
-import { exportDailyAttendanceExcel } from '../utils/excelExport'; 
-import { Plus, Search, Edit2, Trash2, Download, X, Check, FileSpreadsheet } from 'lucide-react';
+import { exportDailyAttendanceExcel, getAutoColumnWidths } from '../utils/excelExport'; 
+import { Plus, Search, Edit2, Trash2, Download, X, Check, FileSpreadsheet, Upload } from 'lucide-react';
+import { parseExcel } from '../utils/excelImport';
 
 function StudentModal({ student, classes, onClose, onSave, isTeacher }) {
     const [form, setForm] = useState({
@@ -11,6 +12,7 @@ function StudentModal({ student, classes, onClose, onSave, isTeacher }) {
         gender: student?.gender || 'Nam',
         dob: student?.dob || '',
         phone: student?.phone || '',
+        email: student?.email || '',
         classId: student?.classId || ''
     });
     const handle = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -74,6 +76,10 @@ function StudentModal({ student, classes, onClose, onSave, isTeacher }) {
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
                         <input className="input" value={form.phone} onChange={e => handle('phone', e.target.value)} placeholder="09xxxxxxxx" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <input className="input" type="email" value={form.email} onChange={e => handle('email', e.target.value)} placeholder="example@email.com" />
                     </div>
                 </div>
                 <div className="flex gap-3 p-6 pt-0">
@@ -174,6 +180,34 @@ export function Students({ user }) {
         }
     };
 
+    const handleImport = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const mapping = {
+            'Mã HS': 'id',
+            'Họ tên': 'name',
+            'Học phần': 'classId',
+            'Giới tính': 'gender',
+            'Ngày sinh': 'dob',
+            'Điện thoại': 'phone',
+            'Email': 'email'
+        };
+
+        setLoading(true);
+        try {
+            const data = await parseExcel(file, mapping);
+            await api.post('/students/bulk', data);
+            alert('Import thành công ' + data.length + ' học sinh');
+            fetchData();
+        } catch (error) {
+            alert('Lỗi Import: ' + error.message);
+        } finally {
+            setLoading(false);
+            e.target.value = null;
+        }
+    };
+
     return (
         <div className="space-y-5 animate-fade-in">
             {/* Toolbar */}
@@ -199,10 +233,12 @@ export function Students({ user }) {
                             'Học phần': s.classId,
                             'Giới tính': s.gender,
                             'Ngày sinh': s.dob,
-                            'Điện thoại': s.phone
+                            'Điện thoại': s.phone,
+                            'Email': s.email
                         }));
                         import('xlsx').then(XLSX => {
                             const ws = XLSX.utils.json_to_sheet(data);
+                            ws['!cols'] = getAutoColumnWidths(data);
                             const wb = XLSX.utils.book_new();
                             XLSX.utils.book_append_sheet(wb, ws, "Danh sách học sinh");
                             XLSX.writeFile(wb, `danh_sach_hoc_sinh_${filterClass}.xlsx`);
@@ -210,11 +246,16 @@ export function Students({ user }) {
                     }}>
                     <FileSpreadsheet size={15} /> Excel
                 </button>
-                {/* Nút thêm học sinh: chỉ Admin */}
                 {!isTeacher && (
-                    <button className="btn-primary" onClick={() => setModal('add')}>
-                        <Plus size={15} /> Thêm học sinh
-                    </button>
+                    <>
+                        <label className="btn-secondary border-indigo-200 text-indigo-600 hover:bg-indigo-50 cursor-pointer">
+                            <Upload size={15} /> Import
+                            <input type="file" className="hidden" accept=".xlsx, .xls" onChange={handleImport} />
+                        </label>
+                        <button className="btn-primary" onClick={() => setModal('add')}>
+                            <Plus size={15} /> Thêm học sinh
+                        </button>
+                    </>
                 )}
             </div>
 
@@ -240,7 +281,7 @@ export function Students({ user }) {
                                 <th className="text-left p-4">Học phần</th>
                                 <th className="text-left p-4">Giới tính</th>
                                 <th className="text-left p-4">Ngày sinh</th>
-                                <th className="text-left p-4">Điện thoại</th>
+                                <th className="text-left p-4">Thông tin liên lạc</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -258,9 +299,18 @@ export function Students({ user }) {
                                     <td className="p-4">
                                         <span className="bg-indigo-50 text-indigo-700 text-xs font-semibold px-2 py-0.5 rounded">{s.classId || '—'}</span>
                                     </td>
-                                    <td className="p-4 text-gray-500">{s.gender}</td>
+                                    <td className="p-4">
+                                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${s.gender === 'Nữ' ? 'bg-pink-100 text-pink-600' : 'bg-blue-100 text-blue-600'}`}>
+                                            {s.gender || 'Nam'}
+                                        </span>
+                                    </td>
                                     <td className="p-4 text-gray-500">{s.dob}</td>
-                                    <td className="p-4 text-gray-500">{s.phone}</td>
+                                    <td className="p-4">
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="text-gray-700 font-medium">{s.phone}</span>
+                                            <span className="text-xs text-gray-400">{s.email || '—'}</span>
+                                        </div>
+                                    </td>
                                     <td className="p-4">
                                         <div className="flex items-center justify-center gap-2">
                                             {!isTeacher && (

@@ -8,11 +8,13 @@ export function Schedules({ user }) {
     const [schedulesList, setSchedulesList] = useState([]);
     const [classes, setClasses] = useState([]);
     const [teachers, setTeachers] = useState([]);
+    const [locations, setLocations] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [editingSchedule, setEditingSchedule] = useState(null);
-    const [formData, setFormData] = useState({ id: '', subject: '', classId: '', teacherId: '', dayOfWeek: 'Thứ 2', startTime: '', endTime: '', room: '' });
+    const [formData, setFormData] = useState({ id: '', subject: '', classId: '', teacherId: '', dayOfWeek: 'Thứ 2', startTime: '', endTime: '', room: '', locationId: '' });
+    const [showPicker, setShowPicker] = useState({ start: false, end: false });
 
     useEffect(() => {
         fetchData();
@@ -21,12 +23,14 @@ export function Schedules({ user }) {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [schRes, clsRes] = await Promise.all([
+            const [schRes, clsRes, locRes] = await Promise.all([
                 api.get('/schedules'),
                 api.get('/classes'),
+                api.get('/locations'),
             ]);
             setSchedulesList(schRes);
             setClasses(clsRes);
+            setLocations(locRes);
 
             // Chỉ admin mới có quyền lấy danh sách giáo viên
             if (!isTeacher) {
@@ -124,7 +128,8 @@ export function Schedules({ user }) {
         setEditingSchedule(s);
         setFormData({
             ...s,
-            dayOfWeek: s.dayOfWeek
+            dayOfWeek: s.dayOfWeek,
+            locationId: s.locationId || ''
         });
         setShowModal(true);
     };
@@ -156,7 +161,8 @@ export function Schedules({ user }) {
                                 dayOfWeek: 'Thứ 2', 
                                 startTime: '', 
                                 endTime: '', 
-                                room: '' 
+                                room: '',
+                                locationId: locations[0]?.id || '' 
                             }); 
                             setShowModal(true); 
                         }}
@@ -227,6 +233,12 @@ export function Schedules({ user }) {
                                                     <Clock size={15} className="text-emerald-500" />
                                                     {sch.startTime} - {sch.endTime}
                                                 </div>
+                                                {sch.locationId && (
+                                                    <div className="flex items-center gap-1 text-[11px] text-gray-400 font-medium">
+                                                        <MapPin size={12} className="text-indigo-400" />
+                                                        {locations.find(l => l.id === sch.locationId)?.name || sch.locationId}
+                                                    </div>
+                                                )}
                                             </div>
                                             {!isTeacher && (
                                                 <div className="flex items-center gap-2 text-xs text-gray-400 font-medium">
@@ -334,13 +346,121 @@ export function Schedules({ user }) {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-bold text-gray-600 mb-2">Bắt đầu</label>
-                                    <input required type="time" className="input" value={formData.startTime} onChange={e => setFormData({ ...formData, startTime: e.target.value })} />
+                                    <label className="block text-sm font-bold text-gray-600 mb-2">Vị trí GPS</label>
+                                    <select required className="input" value={formData.locationId} onChange={e => setFormData({ ...formData, locationId: e.target.value })}>
+                                        <option value="">-- Chọn vị trí --</option>
+                                        {locations.map(l => <option key={l.id} value={l.id}>{l.name} ({l.address})</option>)}
+                                    </select>
                                 </div>
 
-                                <div className="md:col-span-2">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-600 mb-2">Bắt đầu</label>
+                                    <div className="relative">
+                                        <div className="flex items-center">
+                                            <input 
+                                                type="text" 
+                                                className="input pr-12 font-mono" 
+                                                placeholder="HH:mm"
+                                                value={formData.startTime}
+                                                onChange={e => setFormData({ ...formData, startTime: e.target.value })}
+                                            />
+                                            <button 
+                                                type="button"
+                                                className="absolute right-2 p-2 text-gray-400 hover:text-indigo-600 hover:bg-gray-100 rounded-xl transition-all"
+                                                onClick={() => setShowPicker({ ...showPicker, start: !showPicker.start })}
+                                            >
+                                                <Clock size={18} />
+                                            </button>
+                                        </div>
+                                        
+                                        {showPicker.start && (
+                                            <div className="absolute top-full left-0 mt-2 p-3 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 flex items-center gap-2 animate-slide-up">
+                                                <select 
+                                                    className="input-sm w-20 text-center"
+                                                    value={formData.startTime.split(':')[0] || '00'}
+                                                    onChange={e => {
+                                                        const h = e.target.value;
+                                                        const m = formData.startTime.split(':')[1] || '00';
+                                                        setFormData({ ...formData, startTime: `${h}:${m}` });
+                                                    }}
+                                                >
+                                                    {Array.from({ length: 24 }).map((_, i) => (
+                                                        <option key={i} value={i.toString().padStart(2, '0')}>{i.toString().padStart(2, '0')}h</option>
+                                                    ))}
+                                                </select>
+                                                <span className="font-bold text-gray-300">:</span>
+                                                <select 
+                                                    className="input-sm w-20 text-center"
+                                                    value={formData.startTime.split(':')[1] || '00'}
+                                                    onChange={e => {
+                                                        const m = e.target.value;
+                                                        const h = formData.startTime.split(':')[0] || '00';
+                                                        setFormData({ ...formData, startTime: `${h}:${m}` });
+                                                        setShowPicker({ ...showPicker, start: false }); // Auto-close on minute select
+                                                    }}
+                                                >
+                                                    {Array.from({ length: 60 }).map((_, i) => (
+                                                        <option key={i} value={i.toString().padStart(2, '0')}>{i.toString().padStart(2, '0')}p</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div>
                                     <label className="block text-sm font-bold text-gray-600 mb-2">Kết thúc</label>
-                                    <input required type="time" className="input" value={formData.endTime} onChange={e => setFormData({ ...formData, endTime: e.target.value })} />
+                                    <div className="relative">
+                                        <div className="flex items-center">
+                                            <input 
+                                                type="text" 
+                                                className="input pr-12 font-mono" 
+                                                placeholder="HH:mm"
+                                                value={formData.endTime}
+                                                onChange={e => setFormData({ ...formData, endTime: e.target.value })}
+                                            />
+                                            <button 
+                                                type="button"
+                                                className="absolute right-2 p-2 text-gray-400 hover:text-indigo-600 hover:bg-gray-100 rounded-xl transition-all"
+                                                onClick={() => setShowPicker({ ...showPicker, end: !showPicker.end })}
+                                            >
+                                                <Clock size={18} />
+                                            </button>
+                                        </div>
+                                        
+                                        {showPicker.end && (
+                                            <div className="absolute top-full left-0 mt-2 p-3 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 flex items-center gap-2 animate-slide-up">
+                                                <select 
+                                                    className="input-sm w-20 text-center"
+                                                    value={formData.endTime.split(':')[0] || '00'}
+                                                    onChange={e => {
+                                                        const h = e.target.value;
+                                                        const m = formData.endTime.split(':')[1] || '00';
+                                                        setFormData({ ...formData, endTime: `${h}:${m}` });
+                                                    }}
+                                                >
+                                                    {Array.from({ length: 24 }).map((_, i) => (
+                                                        <option key={i} value={i.toString().padStart(2, '0')}>{i.toString().padStart(2, '0')}h</option>
+                                                    ))}
+                                                </select>
+                                                <span className="font-bold text-gray-300">:</span>
+                                                <select 
+                                                    className="input-sm w-20 text-center"
+                                                    value={formData.endTime.split(':')[1] || '00'}
+                                                    onChange={e => {
+                                                        const m = e.target.value;
+                                                        const h = formData.endTime.split(':')[0] || '00';
+                                                        setFormData({ ...formData, endTime: `${h}:${m}` });
+                                                        setShowPicker({ ...showPicker, end: false });
+                                                    }}
+                                                >
+                                                    {Array.from({ length: 60 }).map((_, i) => (
+                                                        <option key={i} value={i.toString().padStart(2, '0')}>{i.toString().padStart(2, '0')}p</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                             <div className="flex gap-4 pt-4">

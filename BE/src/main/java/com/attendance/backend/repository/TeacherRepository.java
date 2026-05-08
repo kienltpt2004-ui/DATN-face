@@ -15,4 +15,7 @@ public interface TeacherRepository extends JpaRepository<Teacher, String> {
 
     @org.springframework.data.jpa.repository.Query("SELECT t FROM Teacher t LEFT JOIN t.user u WHERE t.id = :idOrUsername OR u.username = :idOrUsername")
     java.util.Optional<Teacher> findByUsernameOrId(@org.springframework.data.repository.query.Param("idOrUsername") String idOrUsername);
+
+    boolean existsByEmail(String email);
+    boolean existsByPhone(String phone);
 }

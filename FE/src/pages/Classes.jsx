@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../utils/api';
-import { Plus, Search, Edit2, Trash2, Users, BookOpen, X, Check } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Users, BookOpen, X, Check, Upload } from 'lucide-react';
+import { parseExcel } from '../utils/excelImport';
 
 export function Classes() {
     const [classList, setClassList] = useState([]);
@@ -10,6 +11,7 @@ export function Classes() {
     const [searchTerm, setSearchTerm] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [showEnrollmentModal, setShowEnrollmentModal] = useState(null);
+    const [showDesc, setShowDesc] = useState(null);
     const [editingClass, setEditingClass] = useState(null);
     const [formData, setFormData] = useState({ name: '', id: '', description: '', maxStudents: 50 });
 
@@ -39,6 +41,20 @@ export function Classes() {
         c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.id.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    const handleDelete = async (id) => {
+        if (window.confirm('Bạn có chắc chắn muốn xóa học phần này?')) {
+            setLoading(true);
+            try {
+                await api.delete(`/classes/${id}`);
+                setClassList(classList.filter(c => c.id !== id));
+            } catch (error) {
+                alert('Lỗi khi xóa: ' + error.message);
+            } finally {
+                setLoading(false);
+            }
+        }
+    };
 
     const handleSave = async (e) => {
         e.preventDefault();
@@ -73,17 +89,28 @@ export function Classes() {
         }
     };
 
-    const handleDelete = async (id) => {
-        if (confirm('Bạn có chắc chắn muốn xóa học phần này?')) {
-            setLoading(true);
-            try {
-                await api.delete(`/classes/${id}`);
-                setClassList(classList.filter(c => c.id !== id));
-            } catch (error) {
-                alert('Lỗi khi xóa: ' + error.message);
-            } finally {
-                setLoading(false);
-            }
+    const handleImport = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const mapping = {
+            'Mã môn': 'id',
+            'Tên môn': 'name',
+            'Sĩ số': 'maxStudents',
+            'Mô tả': 'description'
+        };
+
+        setLoading(true);
+        try {
+            const data = await parseExcel(file, mapping);
+            await api.post('/classes/bulk', data);
+            alert('Import thành công ' + data.length + ' môn học');
+            fetchData();
+        } catch (error) {
+            alert('Lỗi Import: ' + error.message);
+        } finally {
+            setLoading(false);
+            e.target.value = null;
         }
     };
 
@@ -111,12 +138,18 @@ export function Classes() {
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <button
-                    className="btn-primary flex items-center gap-2 whitespace-nowrap"
-                    onClick={() => { setEditingClass(null); setFormData({ name: '', id: '', description: '', maxStudents: 50 }); setShowModal(true); }}
-                >
-                    <Plus size={18} /> Thêm môn học mới
-                </button>
+                <div className="flex gap-2">
+                    <label className="btn-secondary border-indigo-200 text-indigo-600 hover:bg-indigo-50 cursor-pointer flex items-center gap-2">
+                        <Upload size={18} /> Import Excel
+                        <input type="file" className="hidden" accept=".xlsx, .xls" onChange={handleImport} />
+                    </label>
+                    <button
+                        className="btn-primary flex items-center gap-2 whitespace-nowrap"
+                        onClick={() => { setEditingClass(null); setFormData({ name: '', id: '', description: '', maxStudents: 50 }); setShowModal(true); }}
+                    >
+                        <Plus size={18} /> Thêm môn học mới
+                    </button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative min-h-[300px]">
@@ -128,8 +161,8 @@ export function Classes() {
                 {filtered.map((cls) => (
                     <div key={cls.id} className="card hover:border-indigo-200 transition-all group overflow-hidden">
                         <div className="flex justify-between items-start mb-4">
-                            <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xl">
-                                {cls.name.substring(0, 2)}
+                            <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-inner">
+                                <BookOpen size={24} />
                             </div>
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button onClick={() => setShowEnrollmentModal(cls)} className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all" title="Quản lý sĩ số"><Users size={14} /></button>
@@ -164,9 +197,13 @@ export function Classes() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex items-center justify-between text-sm">
-                                <span className="text-gray-500 flex items-center gap-2"><BookOpen size={14} /> Mô tả:</span>
-                                <span className="font-semibold text-gray-700 truncate ml-4" title={cls.description}>{cls.description || 'Không có mô tả'}</span>
+                            <div className="pt-2">
+                                <button 
+                                    onClick={() => setShowDesc(cls)}
+                                    className="w-full py-2 px-4 bg-slate-50 hover:bg-indigo-50 text-indigo-600 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border border-dashed border-indigo-100"
+                                >
+                                    <BookOpen size={14} /> Xem mô tả chi tiết
+                                </button>
                             </div>
 
                         </div>
@@ -218,7 +255,31 @@ export function Classes() {
                     </div>
                 </div>
             )}
-            {/* Enrollment Management Modal */}
+            {/* Modal Mô tả chi tiết */}
+            {showDesc && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden animate-slide-up">
+                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-indigo-50/50">
+                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                <BookOpen className="text-indigo-600" size={20} /> Mô tả môn học
+                            </h3>
+                            <button onClick={() => setShowDesc(null)} className="hover:bg-white p-2 rounded-xl transition-all shadow-sm"><X size={18} /></button>
+                        </div>
+                        <div className="p-8">
+                            <h4 className="text-indigo-600 font-bold text-sm mb-2 uppercase tracking-wider">{showDesc.name}</h4>
+                            <p className="text-gray-600 leading-relaxed text-sm whitespace-pre-wrap">
+                                {showDesc.description || 'Hiện chưa có thông tin mô tả chi tiết cho môn học này.'}
+                            </p>
+                            <button 
+                                onClick={() => setShowDesc(null)} 
+                                className="w-full mt-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold transition-all shadow-lg shadow-indigo-100"
+                            >
+                                Đã rõ
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {showEnrollmentModal && (
                 <EnrollmentModal 
                     cls={showEnrollmentModal} 

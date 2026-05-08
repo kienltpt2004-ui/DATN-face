@@ -157,7 +157,7 @@ public class AttendanceRecord {
     }
 
     public enum AttendanceStatus {
-        present, absent, late
+        present, absent, late, half
     }
 
     public enum Method {

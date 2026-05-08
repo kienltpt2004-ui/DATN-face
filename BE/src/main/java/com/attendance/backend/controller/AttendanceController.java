@@ -148,7 +148,9 @@ public class AttendanceController {
         AttendanceRecordDTO response = attendanceService.checkin(
                 studentId, 
                 request.getScheduleId(), 
-                request.getBase64()
+                request.getBase64(),
+                request.getLat(),
+                request.getLng()
         );
 
         return ResponseEntity.ok(

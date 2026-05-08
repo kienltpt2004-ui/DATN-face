@@ -10,11 +10,12 @@ public class ScheduleDTO {
     private String startTime;
     private String endTime;
     private String room;
+    private String locationId;
 
     public ScheduleDTO() {
     }
 
-    public ScheduleDTO(String id, String classId, String subject, String teacherId, String teacherName, String dayOfWeek, String startTime, String endTime, String room) {
+    public ScheduleDTO(String id, String classId, String subject, String teacherId, String teacherName, String dayOfWeek, String startTime, String endTime, String room, String locationId) {
         this.id = id;
         this.classId = classId;
         this.subject = subject;
@@ -24,6 +25,7 @@ public class ScheduleDTO {
         this.startTime = startTime;
         this.endTime = endTime;
         this.room = room;
+        this.locationId = locationId;
     }
 
     public static ScheduleDTOBuilder builder() {
@@ -102,6 +104,14 @@ public class ScheduleDTO {
         this.room = room;
     }
 
+    public String getLocationId() {
+        return locationId;
+    }
+
+    public void setLocationId(String locationId) {
+        this.locationId = locationId;
+    }
+
     public static class ScheduleDTOBuilder {
         private String id;
         private String classId;
@@ -112,6 +122,7 @@ public class ScheduleDTO {
         private String startTime;
         private String endTime;
         private String room;
+        private String locationId;
 
         ScheduleDTOBuilder() {
         }
@@ -161,8 +172,13 @@ public class ScheduleDTO {
             return this;
         }
 
+        public ScheduleDTOBuilder locationId(String locationId) {
+            this.locationId = locationId;
+            return this;
+        }
+
         public ScheduleDTO build() {
-            return new ScheduleDTO(id, classId, subject, teacherId, teacherName, dayOfWeek, startTime, endTime, room);
+            return new ScheduleDTO(id, classId, subject, teacherId, teacherName, dayOfWeek, startTime, endTime, room, locationId);
         }
     }
 }

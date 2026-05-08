@@ -95,8 +95,8 @@ public class FaceAttendanceController {
                 LocalTime start = LocalTime.parse(s.getStartTime());
                 LocalTime end = LocalTime.parse(s.getEndTime());
                 
-                // Cho phép điểm danh từ 30p trước giờ bắt đầu đến trước giờ kết thúc
-                if (now.isAfter(start.minusMinutes(30)) && now.isBefore(end)) {
+                // Cho phép điểm danh từ khi bắt đầu học đến 30p sau khi bắt đầu
+                if (now.isAfter(start) && now.isBefore(start.plusMinutes(30))) {
                     activeSchedule = s;
                     break;
                 }

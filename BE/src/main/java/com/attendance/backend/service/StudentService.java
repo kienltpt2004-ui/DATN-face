@@ -78,6 +78,12 @@ public class StudentService {
         if (studentRepository.existsById(dto.getId())) {
             throw new RuntimeException("Mã sinh viên đã tồn tại: " + dto.getId());
         }
+        if (dto.getEmail() != null && !dto.getEmail().isEmpty() && studentRepository.existsByEmail(dto.getEmail())) {
+            throw new RuntimeException("Email đã được sử dụng bởi học sinh khác: " + dto.getEmail());
+        }
+        if (dto.getPhone() != null && !dto.getPhone().isEmpty() && studentRepository.existsByPhone(dto.getPhone())) {
+            throw new RuntimeException("Số điện thoại đã được sử dụng bởi học sinh khác: " + dto.getPhone());
+        }
 
         // Tạo tài khoản user cho sinh viên
         User user = User.builder()
@@ -86,6 +92,7 @@ public class StudentService {
                 .role(User.Role.STUDENT)
                 .name(dto.getName())
                 .phone(dto.getPhone())
+                .email(dto.getEmail())
                 .isActive(true)
                 .build();
         user = userRepository.save(user);
@@ -96,6 +103,7 @@ public class StudentService {
                 .gender(dto.getGender())
                 .dob(dto.getDob())
                 .phone(dto.getPhone())
+                .email(dto.getEmail())
                 .faceImagePath(dto.getFaceImagePath())
                 .faceEmbedding(dto.getFaceEmbedding())
                 .isActive(dto.getIsActive() != null ? dto.getIsActive() : true)
@@ -107,14 +115,28 @@ public class StudentService {
     }
 
     @Transactional
+    public List<StudentDTO> createStudentsBulk(List<StudentDTO> dtos) {
+        return dtos.stream().map(this::createStudent).toList();
+    }
+
+    @Transactional
     public StudentDTO updateStudent(String id, StudentDTO dto) {
         Student student = findOrThrow(id);
+
+        // Validate trùng email/sđt của người khác
+        if (dto.getEmail() != null && !dto.getEmail().isEmpty() && !dto.getEmail().equals(student.getEmail()) && studentRepository.existsByEmail(dto.getEmail())) {
+            throw new RuntimeException("Email đã được sử dụng bởi học sinh khác: " + dto.getEmail());
+        }
+        if (dto.getPhone() != null && !dto.getPhone().isEmpty() && !dto.getPhone().equals(student.getPhone()) && studentRepository.existsByPhone(dto.getPhone())) {
+            throw new RuntimeException("Số điện thoại đã được sử dụng bởi học sinh khác: " + dto.getPhone());
+        }
 
         student.setName(dto.getName());
         syncClasses(student, dto.getClassId());
         student.setGender(dto.getGender());
         student.setDob(dto.getDob());
         student.setPhone(dto.getPhone());
+        student.setEmail(dto.getEmail());
         if (dto.getFaceImagePath() != null) {
             student.setFaceImagePath(dto.getFaceImagePath());
         }
@@ -130,6 +152,17 @@ public class StudentService {
             userRepository.findById(student.getUserId()).ifPresent(user -> {
                 user.setName(dto.getName());
                 user.setPhone(dto.getPhone());
+                user.setEmail(dto.getEmail());
+                if (dto.getIsActive() != null) user.setIsActive(dto.getIsActive());
+                userRepository.save(user);
+            });
+        } else {
+            // Fallback: Tìm theo username (Mã sinh viên) nếu chưa có link userId
+            userRepository.findByUsername(student.getId()).ifPresent(user -> {
+                student.setUserId(user.getId()); // Cập nhật lại link cho student
+                user.setName(dto.getName());
+                user.setPhone(dto.getPhone());
+                user.setEmail(dto.getEmail());
                 if (dto.getIsActive() != null) user.setIsActive(dto.getIsActive());
                 userRepository.save(user);
             });
@@ -203,6 +236,7 @@ public class StudentService {
                 .gender(s.getGender())
                 .dob(s.getDob())
                 .phone(s.getPhone())
+                .email(s.getEmail())
                 .faceImagePath(s.getFaceImagePath())
                 .faceEmbedding(s.getFaceEmbedding())
                 .isActive(s.getIsActive())
