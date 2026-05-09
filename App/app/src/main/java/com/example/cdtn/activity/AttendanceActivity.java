@@ -13,6 +13,10 @@ import android.widget.ImageView;
 import android.widget.Spinner;
 import android.widget.Toast;
 import android.Manifest;
+import android.annotation.SuppressLint;
+import android.content.IntentSender;
+import android.location.Location;
+import android.location.LocationManager;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -34,25 +38,40 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
+import com.google.android.gms.common.api.ResolvableApiException;
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.LocationSettingsRequest;
+import com.google.android.gms.location.LocationSettingsResponse;
+import com.google.android.gms.location.Priority;
+import com.google.android.gms.location.SettingsClient;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
+
 public class AttendanceActivity extends AppCompatActivity {
     private static final int CAMERA_REQUEST = 101;
+    private static final int REQUEST_CHECK_SETTINGS = 102;
 
     private Bitmap bitmap;
     private Spinner spinnerSchedule;
     private List<AvailableSchedule> availableSchedules = new ArrayList<>();
     private Button btnAttendance;
+    private FusedLocationProviderClient fusedLocationClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_attendance);
 
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+
         spinnerSchedule = findViewById(R.id.spinnerSchedule);
         ImageView imageView = findViewById(R.id.imageView);
         Button btnCapture = findViewById(R.id.btnCapture);
         btnAttendance = findViewById(R.id.btnAttendance);
 
-        // Khóa nút điểm danh cho đến khi load được lịch học
         btnAttendance.setEnabled(false);
 
         btnCapture.setOnClickListener(v -> openCamera());
@@ -71,52 +90,115 @@ public class AttendanceActivity extends AppCompatActivity {
             AvailableSchedule selected = (AvailableSchedule) spinnerSchedule.getSelectedItem();
             String base64 = ImageUtils.bitmapToBase64(bitmap);
 
-            AttendanceRequest request = new AttendanceRequest(base64, selected.getScheduleId());
-
-            ApiService apiService = RetrofitClient
-                    .getClient(this)
-                    .create(ApiService.class);
-
-            apiService.attendance(request)
-                    .enqueue(new Callback<ApiResponse<AttendanceResponse>>() {
-                        @Override
-                        public void onResponse(Call<ApiResponse<AttendanceResponse>> call,
-                                               Response<ApiResponse<AttendanceResponse>> response) {
-                            if (response.isSuccessful() && response.body() != null) {
-                                AttendanceResponse data = response.body().getData();
-                                Toast.makeText(AttendanceActivity.this,
-                                        "Điểm danh thành công!\n" +
-                                                "Sinh viên: " + data.getStudentName() + "\n" +
-                                                "Thời gian: " + data.getCheckInTime(),
-                                        Toast.LENGTH_LONG).show();
-                                finish();
-                            } else {
-                                String errorMsg = "Lỗi hệ thống";
-                                try {
-                                    if (response.errorBody() != null) {
-                                        String errorJson = response.errorBody().string();
-                                        // Cố gắng lấy message từ JSON nếu có
-                                        if (errorJson.contains("\"message\":\"")) {
-                                            errorMsg = errorJson.split("\"message\":\"")[1].split("\"")[0];
-                                        } else {
-                                            errorMsg = response.message();
-                                        }
-                                    }
-                                } catch (Exception e) {
-                                    errorMsg = response.message();
-                                }
-                                Toast.makeText(AttendanceActivity.this, "Thất bại: " + errorMsg, Toast.LENGTH_LONG).show();
-                            }
-                        }
-
-                        @Override
-                        public void onFailure(Call<ApiResponse<AttendanceResponse>> call, Throwable t) {
-                            Toast.makeText(AttendanceActivity.this, "Lỗi kết nối: " + t.getMessage(), Toast.LENGTH_SHORT).show();
-                        }
-                    });
+            requestLocationAndSend(base64, selected.getScheduleId());
         });
 
         loadAvailableSchedules();
+        requestLocationPermission();
+    }
+
+    @SuppressLint("MissingPermission")
+    private void requestLocationAndSend(String base64, String scheduleId) {
+        Toast.makeText(this, "Đang lấy vị trí GPS...", Toast.LENGTH_SHORT).show();
+
+        // Dùng getCurrentLocation để lấy vị trí HIỆN TẠI, không phải cache cũ
+        com.google.android.gms.location.CurrentLocationRequest locationRequest =
+                new com.google.android.gms.location.CurrentLocationRequest.Builder()
+                        .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+                        .setMaxUpdateAgeMillis(0) // Không dùng cache, bắt buộc lấy mới
+                        .setDurationMillis(10000)
+                        .build();
+
+        fusedLocationClient.getCurrentLocation(locationRequest, null)
+                .addOnSuccessListener(this, location -> {
+                    Double lat = null;
+                    Double lng = null;
+                    if (location != null) {
+                        lat = location.getLatitude();
+                        lng = location.getLongitude();
+                        Toast.makeText(this, "GPS: " + String.format("%.5f, %.5f", lat, lng), Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(this, "Không lấy được vị trí GPS, sẽ thử điểm danh không có GPS", Toast.LENGTH_SHORT).show();
+                    }
+
+                    sendAttendance(base64, scheduleId, lat, lng);
+                })
+                .addOnFailureListener(this, e -> {
+                    Toast.makeText(this, "Lỗi lấy GPS: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    sendAttendance(base64, scheduleId, null, null);
+                });
+    }
+
+    private void sendAttendance(String base64, String scheduleId, Double lat, Double lng) {
+        AttendanceRequest request = new AttendanceRequest(base64, scheduleId, lat, lng);
+        ApiService apiService = RetrofitClient.getClient(this).create(ApiService.class);
+        apiService.attendance(request).enqueue(new Callback<ApiResponse<AttendanceResponse>>() {
+            @Override
+            public void onResponse(Call<ApiResponse<AttendanceResponse>> call, Response<ApiResponse<AttendanceResponse>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    AttendanceResponse data = response.body().getData();
+                    Toast.makeText(AttendanceActivity.this, "Điểm danh thành công!\n" + data.getStudentName(), Toast.LENGTH_LONG).show();
+                    finish();
+                } else {
+                    String errorMsg = "Lỗi hệ thống";
+                    try {
+                        if (response.errorBody() != null) {
+                            String errorJson = response.errorBody().string();
+                            if (errorJson.contains("\"message\":\"")) {
+                                errorMsg = errorJson.split("\"message\":\"")[1].split("\"")[0];
+                            }
+                        }
+                    } catch (Exception ignored) {}
+
+                    Toast.makeText(AttendanceActivity.this, "Thất bại: " + errorMsg, Toast.LENGTH_LONG).show();
+
+                    if (errorMsg.contains("Vui lòng bật GPS")) {
+                        checkGPSAndRun();
+                    }
+                }
+            }
+
+            @Override
+            public void onFailure(Call<ApiResponse<AttendanceResponse>> call, Throwable t) {
+                Toast.makeText(AttendanceActivity.this, "Lỗi kết nối: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void requestLocationPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 103);
+        } else {
+            checkGPSAndRun();
+        }
+    }
+
+    private void checkGPSAndRun() {
+        LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        if (locationManager != null && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            return;
+        }
+
+        LocationRequest locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10000)
+                .setMinUpdateIntervalMillis(5000)
+                .build();
+
+        LocationSettingsRequest.Builder builder = new LocationSettingsRequest.Builder()
+                .addLocationRequest(locationRequest);
+
+        SettingsClient client = LocationServices.getSettingsClient(this);
+        Task<LocationSettingsResponse> task = client.checkLocationSettings(builder.build());
+
+        task.addOnSuccessListener(this, locationSettingsResponse -> {});
+
+        task.addOnFailureListener(this, e -> {
+            if (e instanceof ResolvableApiException) {
+                try {
+                    ResolvableApiException resolvable = (ResolvableApiException) e;
+                    resolvable.startResolutionForResult(AttendanceActivity.this, REQUEST_CHECK_SETTINGS);
+                } catch (IntentSender.SendIntentException ignored) {}
+            }
+        });
     }
 
     private void loadAvailableSchedules() {
@@ -126,9 +208,7 @@ public class AttendanceActivity extends AppCompatActivity {
             public void onResponse(Call<ApiResponse<List<AvailableSchedule>>> call, Response<ApiResponse<List<AvailableSchedule>>> response) {
                 if (response.isSuccessful() && response.body() != null) {
                     availableSchedules = response.body().getData();
-                    if (availableSchedules == null || availableSchedules.isEmpty()) {
-                        Toast.makeText(AttendanceActivity.this, "Hiện không có buổi học nào mở điểm danh", Toast.LENGTH_LONG).show();
-                    } else {
+                    if (availableSchedules != null && !availableSchedules.isEmpty()) {
                         ArrayAdapter<AvailableSchedule> adapter = new ArrayAdapter<>(
                                 AttendanceActivity.this,
                                 android.R.layout.simple_spinner_item,
@@ -143,7 +223,7 @@ public class AttendanceActivity extends AppCompatActivity {
 
             @Override
             public void onFailure(Call<ApiResponse<List<AvailableSchedule>>> call, Throwable t) {
-                Toast.makeText(AttendanceActivity.this, "Lỗi tải lịch học: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                Toast.makeText(AttendanceActivity.this, "Lỗi tải lịch học", Toast.LENGTH_SHORT).show();
             }
         });
     }
@@ -163,8 +243,8 @@ public class AttendanceActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == 102 && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             openCamera();
-        } else {
-            Toast.makeText(this, "Cần cấp quyền camera để chụp ảnh", Toast.LENGTH_SHORT).show();
+        } else if (requestCode == 103 && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            checkGPSAndRun();
         }
     }
 
@@ -175,6 +255,10 @@ public class AttendanceActivity extends AppCompatActivity {
             bitmap = (Bitmap) data.getExtras().get("data");
             ImageView imageView = findViewById(R.id.imageView);
             imageView.setImageBitmap(bitmap);
+        } else if (requestCode == REQUEST_CHECK_SETTINGS) {
+            if (resultCode == Activity.RESULT_OK) {
+                Toast.makeText(this, "GPS đã được bật", Toast.LENGTH_SHORT).show();
+            }
         }
     }
 }

@@ -109,11 +109,22 @@ public class AttendanceController {
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ADMIN"));
         
         if (!isAdmin) {
-            String teacherId = authentication.getName(); // Username chính là mã giáo viên
+            String username = authentication.getName(); // Username
             
-            // Kiểm tra xem giáo viên có dạy lớp này trong Schedule không
-            boolean isAssigned = scheduleRepository.findByTeacherIdIgnoreCase(teacherId).stream()
+            // Kiểm tra xem giáo viên có dạy lớp này trong Schedule không (bằng username)
+            boolean isAssigned = scheduleRepository.findByTeacherIdIgnoreCase(username).stream()
                     .anyMatch(s -> s.getClassId().equalsIgnoreCase(classId));
+            
+            // Fallback: Kiểm tra bằng profile ID nếu không tìm thấy bằng username
+            if (!isAssigned) {
+                String profileId = teacherRepository.findByUsernameOrId(username)
+                        .map(com.attendance.backend.entity.Teacher::getId).orElse(username);
+                
+                if (!profileId.equals(username)) {
+                    isAssigned = scheduleRepository.findByTeacherIdIgnoreCase(profileId).stream()
+                            .anyMatch(s -> s.getClassId().equalsIgnoreCase(classId));
+                }
+            }
             
             if (!isAssigned) {
                 throw new RuntimeException("Bạn không được phân công dạy môn học " + classId + ". Vui lòng liên hệ Admin.");

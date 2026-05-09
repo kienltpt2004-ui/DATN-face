@@ -245,11 +245,46 @@ public class StudentService {
 
     @Transactional
     public void registerFace(String studentId, String base64Image) {
+        Student student = studentRepository.findById(studentId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy sinh viên"));
+
+        // Nếu đã có khuôn mặt thì không cho đăng ký lại
+        if (student.getFaceEmbedding() != null && !student.getFaceEmbedding().trim().isEmpty()) {
+            throw new RuntimeException("Khuôn mặt đã được đăng ký. Vui lòng sử dụng chức năng cập nhật.");
+        }
+
+        List<Student> studentsWithFace = studentRepository.findAll().stream()
+                .filter(s -> s.getFaceEmbedding() != null && !s.getFaceEmbedding().trim().isEmpty())
+                .toList();
+
+        String matchedId = faceRecognitionService.findMatchingStudent(base64Image, studentsWithFace);
+        if (matchedId != null) {
+            throw new RuntimeException("Khuôn mặt này đã được đăng ký trên hệ thống.");
+        }
+
         faceRecognitionService.registerFace(studentId, base64Image);
     }
 
     @Transactional
     public void updateFace(String studentId, String base64Image) {
-        faceRecognitionService.updateFace(studentId, base64Image);
+        Student student = studentRepository.findById(studentId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy sinh viên"));
+
+        // Nếu chưa có khuôn mặt thì phải đăng ký trước
+        if (student.getFaceEmbedding() == null || student.getFaceEmbedding().trim().isEmpty()) {
+            throw new RuntimeException("Bạn chưa đăng ký khuôn mặt. Vui lòng sử dụng chức năng đăng ký.");
+        }
+
+        List<Student> studentsWithFace = studentRepository.findAll().stream()
+                .filter(s -> s.getFaceEmbedding() != null && !s.getFaceEmbedding().trim().isEmpty())
+                .toList();
+
+        String matchedId = faceRecognitionService.findMatchingStudent(base64Image, studentsWithFace);
+        // Khi cập nhật, mặt mới không được trùng với người KHÁC
+        if (matchedId != null && !matchedId.equals(studentId)) {
+            throw new RuntimeException("Khuôn mặt này đã được đăng ký bởi người khác.");
+        }
+
+        faceRecognitionService.registerFace(studentId, base64Image);
     }
 }

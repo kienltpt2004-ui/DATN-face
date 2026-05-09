@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 import { exportStudentListPDF } from '../utils/pdfExport';
 import { exportDailyAttendanceExcel, getAutoColumnWidths } from '../utils/excelExport'; 
-import { Plus, Search, Edit2, Trash2, Download, X, Check, FileSpreadsheet, Upload } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Download, X, Check, FileSpreadsheet, Upload, Mail, Phone } from 'lucide-react';
 import { parseExcel } from '../utils/excelImport';
 
 function StudentModal({ student, classes, onClose, onSave, isTeacher }) {
@@ -281,7 +281,8 @@ export function Students({ user }) {
                                 <th className="text-left p-4">Học phần</th>
                                 <th className="text-left p-4">Giới tính</th>
                                 <th className="text-left p-4">Ngày sinh</th>
-                                <th className="text-left p-4">Thông tin liên lạc</th>
+                                <th className="text-left p-4">Liên hệ</th>
+                                <th className="px-6 py-4 text-right">Hành động</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -305,10 +306,14 @@ export function Students({ user }) {
                                         </span>
                                     </td>
                                     <td className="p-4 text-gray-500">{s.dob}</td>
-                                    <td className="p-4">
-                                        <div className="flex flex-col gap-0.5">
-                                            <span className="text-gray-700 font-medium">{s.phone}</span>
-                                            <span className="text-xs text-gray-400">{s.email || '—'}</span>
+                                    <td className="p-4 space-y-1">
+                                        <div className="flex items-center gap-2 text-xs text-gray-600">
+                                            <Mail size={12} className="text-gray-400" />
+                                            {s.email || '—'}
+                                        </div>
+                                        <div className="flex items-center gap-2 text-xs text-gray-600">
+                                            <Phone size={12} className="text-gray-400" />
+                                            {s.phone}
                                         </div>
                                     </td>
                                     <td className="p-4">

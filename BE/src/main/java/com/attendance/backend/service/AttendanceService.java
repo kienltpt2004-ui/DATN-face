@@ -85,14 +85,14 @@ public class AttendanceService {
         }
 
         // Ràng buộc 3: Chỉ được điểm danh trong khung giờ học (cho phép buffer 30p trước và sau)
-        LocalTime now = LocalTime.now();
-        logger.info("Checking attendance time for class: {}, day: {}, now: {}", request.getClassId(), dayOfWeekStr, now);
+        LocalTime nowBulk = LocalTime.now(zoneId);
+        logger.info("Checking attendance time for class: {}, day: {}, now: {}", request.getClassId(), dayOfWeekStr, nowBulk);
 
         boolean isWithinTime = daySchedules.stream().anyMatch(s -> {
             try {
                 LocalTime start = LocalTime.parse(s.getStartTime(), TIME_FORMATTER).minusMinutes(30);
                 LocalTime end = LocalTime.parse(s.getEndTime(), TIME_FORMATTER).plusMinutes(30);
-                boolean match = !now.isBefore(start) && !now.isAfter(end);
+                boolean match = !nowBulk.isBefore(start) && !nowBulk.isAfter(end);
                 logger.info("Schedule: {} - {}, Match: {}", s.getStartTime(), s.getEndTime(), match);
                 return match;
             } catch (DateTimeParseException e) {
@@ -105,7 +105,7 @@ public class AttendanceService {
             String timeInfo = daySchedules.stream()
                 .map(s -> s.getStartTime() + " - " + s.getEndTime())
                 .reduce((a, b) -> a + ", " + b).orElse("");
-            logger.warn("Attendance denied: Outside scheduled time. Now: {}, Allowed: {}", now, timeInfo);
+            logger.warn("Attendance denied: Outside scheduled time. Now: {}, Allowed: {}", nowBulk, timeInfo);
             // Vẫn cho phép giáo viên điểm danh nhưng sẽ có log cảnh báo nếu cần
             // Ở đây ta có thể nới lỏng hơn cho Giáo viên: ví dụ cho phép cả ngày hôm đó.
         }
@@ -152,7 +152,7 @@ public class AttendanceService {
                         .findFirst().orElse(null);
                 if (sched != null) {
                     LocalTime startTime = LocalTime.parse(sched.getStartTime(), TIME_FORMATTER);
-                    LocalTime nowTime = LocalTime.now();
+                    LocalTime nowTime = LocalTime.now(zoneId);
                     
                     if (nowTime.isAfter(startTime.plusMinutes(30))) {
                         record.setStatus(AttendanceRecord.AttendanceStatus.half);
@@ -162,7 +162,7 @@ public class AttendanceService {
                         record.setNote("Ghi nhận sau 15p - Tính muộn");
                     }
                 }
-                record.setCheckInTime(LocalTime.now());
+                record.setCheckInTime(LocalTime.now(zoneId));
             }
             saved.add(attendanceRepo.save(record));
         });
@@ -275,6 +275,25 @@ public class AttendanceService {
             throw new RuntimeException("Đã điểm danh rồi");
         }
 
+        // Ràng buộc mới: Không cho phép điểm danh lớp khác khi lớp trước đó chưa kết thúc
+        List<com.attendance.backend.entity.AttendanceRecord> todaysRecords = attendanceRepo.findByStudentIdAndDate(studentId, LocalDate.now(zoneId));
+        LocalTime now = LocalTime.now(zoneId);
+
+        for (com.attendance.backend.entity.AttendanceRecord record : todaysRecords) {
+            // Bỏ qua chính lớp này nếu đã điểm danh trước đó (đã xử lý ở trên)
+            if (record.getScheduleId().equals(scheduleId)) continue;
+            com.attendance.backend.entity.Schedule prevSchedule = scheduleRepository.findById(record.getScheduleId()).orElse(null);
+            if (prevSchedule != null) {
+                LocalTime prevEndTime;
+                try {
+                    prevEndTime = LocalTime.parse(prevSchedule.getEndTime(), TIME_FORMATTER);
+                } catch (Exception e) { continue; }
+                if (now.isBefore(prevEndTime)) {
+                    throw new RuntimeException("Bạn không thể điểm danh lớp mới khi lớp '" + prevSchedule.getSubject() + "' chưa kết thúc (Kết thúc lúc " + prevSchedule.getEndTime() + ")");
+                }
+            }
+        }
+
         // Ràng buộc GPS: Nếu lịch học có liên kết Location, kiểm tra khoảng cách
         if (schedule.getLocationId() != null && !schedule.getLocationId().isEmpty()) {
             com.attendance.backend.entity.Location loc = locationRepository.findById(schedule.getLocationId())
@@ -310,22 +329,24 @@ public class AttendanceService {
             throw new RuntimeException("Lỗi xác thực khuôn mặt: " + e.getMessage());
         }
 
-        LocalTime now = LocalTime.now(zoneId);
         LocalTime startTime = LocalTime.parse(schedule.getStartTime(), TIME_FORMATTER);
         LocalTime endTime = LocalTime.parse(schedule.getEndTime(), TIME_FORMATTER);
 
-        if (now.isAfter(startTime.plusMinutes(30))) {
-            logger.warn("[DEBUG] Điểm danh thất bại: Đã quá 30 phút kể từ khi bắt đầu ({}). Giờ hiện tại: {}", startTime, now);
-            throw new RuntimeException("Đã quá thời gian tự điểm danh (vượt quá 30 phút)");
+        // Kiểm tra đúng thứ tự: Trước tiên kiểm tra chưa đến giờ
+        if (now.isBefore(startTime)) {
+            throw new RuntimeException("Chưa đến thời gian điểm danh (Tiết học bắt đầu lúc " + schedule.getStartTime() + ")");
         }
 
+        // Sau đó kiểm tra quá 30 phút
+        if (now.isAfter(startTime.plusMinutes(30))) {
+            logger.warn("[DEBUG] Điểm danh thất bại: Đã quá 30 phút kể từ khi bắt đầu ({}). Giờ hiện tại: {}", startTime, now);
+            throw new RuntimeException("Đã quá thời gian tự điểm danh (vượt quá 30 phút kể từ " + schedule.getStartTime() + ")");
+        }
+
+        // Tính trạng thái: muộn nếu sau 15 phút, đúng giờ nếu trong 15 phút đầu
         AttendanceRecord.AttendanceStatus status = now.isAfter(startTime.plusMinutes(15))
                 ? AttendanceRecord.AttendanceStatus.late
                 : AttendanceRecord.AttendanceStatus.present;
-        
-        if (now.isBefore(startTime)) {
-             throw new RuntimeException("Chưa đến thời gian điểm danh (Tiết học chưa bắt đầu)");
-        }
 
         AttendanceRecord record = AttendanceRecord.builder()
                 .studentId(studentId)
@@ -371,6 +392,24 @@ public class AttendanceService {
             logger.info("[DEBUG] Lớp {}: Tìm thấy {} lịch dạy trong DB cho ngày {}", cid, found.size(), dayOfWeekStr);
             allSchedules.addAll(found);
         }
+
+        // Ràng buộc mới: Nếu đang trong giờ học của một lớp đã điểm danh, không hiện các lớp khác
+        List<com.attendance.backend.entity.AttendanceRecord> todaysRecords = attendanceRepo.findByStudentIdAndDate(studentId, today);
+        final com.attendance.backend.entity.Schedule activeSchedule;
+        com.attendance.backend.entity.Schedule tempActive = null;
+        for (com.attendance.backend.entity.AttendanceRecord record : todaysRecords) {
+            com.attendance.backend.entity.Schedule s = scheduleRepository.findById(record.getScheduleId()).orElse(null);
+            if (s != null) {
+                try {
+                    LocalTime endTime = LocalTime.parse(s.getEndTime(), TIME_FORMATTER);
+                    if (now.isBefore(endTime)) {
+                        tempActive = s;
+                        break;
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+        activeSchedule = tempActive;
 
         List<com.attendance.backend.dto.AvailableScheduleDTO> result = allSchedules.stream().filter(s -> {
             try {

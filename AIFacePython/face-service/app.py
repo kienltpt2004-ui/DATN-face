@@ -89,6 +89,47 @@ def verify():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/face/search', methods=['POST'])
+def search():
+    try:
+        data = request.get_json()
+
+        if not data or 'image' not in data or 'gallery' not in data:
+            return jsonify({"error": "Missing image or gallery"}), 400
+
+        image = decode_base64_image(data['image'])
+        if image is None:
+            return jsonify({"error": "Invalid image"}), 400
+
+        encodings = face_recognition.face_encodings(image)
+        if len(encodings) == 0:
+            return jsonify({"error": "No face detected"}), 400
+
+        new_embedding = encodings[0]
+        gallery = data['gallery']  # Expecting list of {"id": "...", "embedding": [...]}
+
+        threshold = 0.5
+        found_id = None
+        min_distance = 1.0
+
+        for item in gallery:
+            stored_embedding = np.array(item['embedding'], dtype=np.float64)
+            distance = face_recognition.face_distance([stored_embedding], new_embedding)[0]
+            
+            if distance < threshold and distance < min_distance:
+                min_distance = distance
+                found_id = item['id']
+
+        return jsonify({
+            "found": found_id is not None,
+            "id": found_id,
+            "distance": float(min_distance) if found_id else None
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)

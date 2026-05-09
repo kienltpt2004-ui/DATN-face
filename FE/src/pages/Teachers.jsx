@@ -162,7 +162,7 @@ export function Teachers() {
                             <th className="px-6 py-4">Mã GV</th>
                             <th className="px-6 py-4">Giới tính</th>
                             <th className="px-6 py-4">Liên hệ</th>
-                            <th className="px-6 py-4 text-right">Thao tác</th>
+                            <th className="px-6 py-4 text-right">Hành động</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">

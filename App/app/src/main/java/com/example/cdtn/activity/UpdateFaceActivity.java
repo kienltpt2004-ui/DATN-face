@@ -50,6 +50,7 @@ public class UpdateFaceActivity extends AppCompatActivity {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 102);
         } else {
             Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            intent.putExtra("android.intent.extras.CAMERA_FACING", 1); // Camera trước
             startActivityForResult(intent, CAMERA_REQUEST);
         }
     }

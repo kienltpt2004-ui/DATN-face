@@ -46,9 +46,20 @@ public class LoginActivity
             String password =
                     edtPassword.getText().toString();
 
+            if (username.trim().isEmpty()) {
+                edtUsername.setError("Vui lòng nhập tên đăng nhập");
+                edtUsername.requestFocus();
+                return;
+            }
+            if (password.trim().isEmpty()) {
+                edtPassword.setError("Vui lòng nhập mật khẩu");
+                edtPassword.requestFocus();
+                return;
+            }
+
             LoginRequest request =
                     new LoginRequest(
-                            username,
+                            username.trim(),
                             password
                     );
 

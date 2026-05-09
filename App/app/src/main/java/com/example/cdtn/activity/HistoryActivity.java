@@ -62,7 +62,9 @@ public class HistoryActivity extends AppCompatActivity {
                             Call<ApiResponse<List<StudentAttendanceResponse>>> call,
                             Throwable t
                     ) {
-
+                        android.widget.Toast.makeText(HistoryActivity.this,
+                                "Không tải được lịch sử: " + t.getMessage(),
+                                android.widget.Toast.LENGTH_SHORT).show();
                     }
                 });
     }

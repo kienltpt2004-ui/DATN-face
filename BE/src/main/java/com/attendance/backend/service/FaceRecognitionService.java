@@ -125,4 +125,43 @@ public class FaceRecognitionService {
     public void updateFace(String studentId, String base64Image) {
         registerFace(studentId, base64Image);
     }
+
+    public String findMatchingStudent(String base64Image, List<Student> galleryStudents) {
+        if (galleryStudents == null || galleryStudents.isEmpty()) return null;
+
+        String url = aiServiceUrl + "/face/search";
+        Map<String, Object> body = new HashMap<>();
+        body.put("image", base64Image);
+
+        List<Map<String, Object>> gallery = new ArrayList<>();
+        for (Student s : galleryStudents) {
+            if (s.getFaceEmbedding() != null) {
+                Map<String, Object> item = new HashMap<>();
+                item.put("id", s.getId());
+                item.put("embedding", parseEmbedding(s.getFaceEmbedding()));
+                gallery.add(item);
+            }
+        }
+        body.put("gallery", gallery);
+
+        try {
+            ResponseEntity<Map> response = restTemplate.postForEntity(url, body, Map.class);
+            if (response.getBody() != null && (Boolean) response.getBody().get("found")) {
+                return (String) response.getBody().get("id");
+            }
+        } catch (Exception e) {
+            logger.error("Lỗi khi tìm khuôn mặt khớp: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    private List<Double> parseEmbedding(String storedEmbedding) {
+        String clean = storedEmbedding.replace("[", "").replace("]", "");
+        String[] parts = clean.split(",");
+        List<Double> embeddingList = new ArrayList<>();
+        for (String p : parts) {
+            embeddingList.add(Double.parseDouble(p.trim()));
+        }
+        return embeddingList;
+    }
 }

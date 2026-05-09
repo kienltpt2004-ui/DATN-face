@@ -1,6 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../utils/api';
 import { Plus, Search, Edit2, Trash2, MapPin, Navigation, X, Check, Activity, Target, Globe } from 'lucide-react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Fix default icon path issue with Vite/Webpack bundlers
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+});
 
 export function Locations() {
     const [locationsList, setLocationsList] = useState([]);
@@ -252,21 +262,27 @@ export function Locations() {
 }
 
 function MapPicker({ lat, lng, radius, onChange }) {
+    const containerRef = useRef(null);
     const mapRef = useRef(null);
     const markerRef = useRef(null);
     const circleRef = useRef(null);
 
     useEffect(() => {
-        if (!window.L) return;
-        
+        if (!containerRef.current) return;
+
         if (!mapRef.current) {
-            mapRef.current = L.map('map-picker').setView([lat, lng], 15);
+            // Khởi tạo bản đồ lần đầu
+            mapRef.current = L.map(containerRef.current).setView([lat || 21.0285, lng || 105.8542], 15);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap'
             }).addTo(mapRef.current);
 
-            markerRef.current = L.marker([lat, lng], { draggable: true }).addTo(mapRef.current);
-            circleRef.current = L.circle([lat, lng], { radius: radius, color: '#10b981', fillOpacity: 0.2 }).addTo(mapRef.current);
+            markerRef.current = L.marker([lat || 21.0285, lng || 105.8542], { draggable: true }).addTo(mapRef.current);
+            circleRef.current = L.circle([lat || 21.0285, lng || 105.8542], {
+                radius: radius || 200,
+                color: '#10b981',
+                fillOpacity: 0.15
+            }).addTo(mapRef.current);
 
             markerRef.current.on('dragend', () => {
                 const pos = markerRef.current.getLatLng();
@@ -275,17 +291,29 @@ function MapPicker({ lat, lng, radius, onChange }) {
 
             mapRef.current.on('click', (e) => {
                 markerRef.current.setLatLng(e.latlng);
+                circleRef.current.setLatLng(e.latlng);
                 onChange(e.latlng.lat, e.latlng.lng);
             });
         } else {
+            // Cập nhật khi lat/lng/radius thay đổi
             const center = [lat, lng];
-            mapRef.current.setView(center);
+            mapRef.current.setView(center, mapRef.current.getZoom());
             markerRef.current.setLatLng(center);
             circleRef.current.setLatLng(center);
             circleRef.current.setRadius(radius);
         }
     }, [lat, lng, radius]);
 
-    return <div id="map-picker" style={{ height: '100%', width: '100%' }} />;
+    // Dọn dẹp khi component bị unmount
+    useEffect(() => {
+        return () => {
+            if (mapRef.current) {
+                mapRef.current.remove();
+                mapRef.current = null;
+            }
+        };
+    }, []);
+
+    return <div ref={containerRef} style={{ height: '100%', width: '100%' }} />;
 }
 
