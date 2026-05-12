@@ -200,61 +200,29 @@ Hệ thống Attendance AI là một nền tảng quản lý điểm danh tích 
 
 ---
 
-### 4.4. Quản Lý Lịch Dạy (Schedules)
+### 4.4. Quản Lý Lịch Học & Lịch Dạy (Schedules)
 
-**Frontend:** `FE/src/pages/Schedules.jsx`  
-**Backend API:** `POST/GET/PUT/DELETE /api/schedules`  
-**Service:** `ScheduleService.java`
+**Frontend Web:** `FE/src/pages/Schedules.jsx`  
+**Mobile App:** `ScheduleFragment.java`  
+**Backend API:** `GET /api/schedules` & `GET /api/students/me/schedules`
 
-**Chức năng:**
-- Tạo lịch dạy: Gán lớp học + giáo viên + ngày trong tuần + giờ bắt đầu/kết thúc + phòng + vị trí GPS
-- Xem lịch dạy theo tuần (dạng lưới hoặc danh sách)
-- Bộ chọn giờ trực quan (định dạng 24h: HH:mm)
-
-**Validate chống trùng lịch:**
-
-| Rule | Mô tả |
-|---|---|
-| Cùng lớp + giờ chồng nhau | ❌ Không cho phép: 1 lớp không thể học 2 môn cùng lúc |
-| Cùng GV + giờ chồng nhau | ❌ Không cho phép: GV không thể dạy 2 lớp cùng lúc |
-| Cùng phòng + giờ chồng nhau | ❌ Không cho phép: Phòng đang có lớp khác |
-| Khác lớp + khác GV + cùng giờ | ✅ Cho phép: Nhiều lớp dạy song song khác nhau |
-
-**Thông báo lỗi rõ ràng:** Ví dụ: *"Giảng viên 'Nguyễn Văn A' đã được xếp dạy lớp CS101 vào Thứ 2 từ 07:00 đến 09:00. Một giảng viên không thể dạy 2 lớp cùng lúc."*
+**Chức năng nâng cao trên Mobile:**
+- **Phân nhóm theo ngày:** Tự động chia lịch học theo các thứ trong tuần (Thứ 2 → Chủ Nhật).
+- **Sắp xếp theo giờ:** Trong cùng một ngày, các môn học được xếp thứ tự theo thời gian bắt đầu.
+- **Giao diện thẻ (Card):** Mỗi môn học hiển thị đầy đủ tên môn, thời gian, và phòng học với thiết kế hiện đại.
 
 ---
 
 ### 4.5. Điểm Danh (Attendance)
 
-**Frontend:** `FE/src/pages/Attendance.jsx`  
-**Backend API:** `/api/attendance/*`  
-**Service:** `AttendanceService.java`
+**Mobile App:** `AttendanceActivity.java`  
+**Backend API:** `GET /api/students/me/schedules/available`
 
-#### Luồng điểm danh thủ công (Giáo viên trên Web):
-```
-[GV chọn lớp học → chọn ngày → xem danh sách]
-           │
-           ▼
-[GV tích checkbox từng sinh viên]
-           │
-           ▼
-[POST /api/attendance/manual]
-           │
-     ┌─────┴─────────────┐
-  < 30 phút đầu      > 30 phút đầu
-     │                    │
-  "Có mặt"          "Nửa buổi (0.5)"
-```
-
-#### Quy tắc thời gian điểm danh:
-
-| Thời điểm | Trạng thái tự động |
-|---|---|
-| Trước giờ học 15 phút | Lớp xuất hiện trên App SV |
-| 0 - 15 phút sau giờ học | **Có mặt (Present)** |
-| 15 - 30 phút sau giờ học | **Muộn (Late)** |
-| Sau 30 phút | App SV bị chặn, chỉ GV điểm được |
-| GV điểm sau 30 phút đầu | **Nửa buổi (Half - tính 0.5)** |
+#### Luồng điểm danh tự động trên App SV:
+1. **Lọc môn học:** App chỉ hiển thị duy nhất môn học đang trong khung giờ được phép điểm danh.
+2. **Chụp ảnh:** Sinh viên chụp ảnh khuôn mặt qua camera trước.
+3. **Xác thực:** Gửi ảnh và tọa độ GPS về server để kiểm tra chéo với dữ liệu gốc.
+4. **Kết quả:** Hiển thị thông báo thành công hoặc lý do thất bại (sai khuôn mặt, sai vị trí, hết giờ).
 
 ---
 
@@ -423,20 +391,27 @@ Hàm `getAutoColumnWidths(data)` tự động tính toán độ rộng tối ưu
 
 ---
 
-## VI. ỨNG DỤNG DI ĐỘNG ANDROID
+## VI. ỨNG DỤNG DI ĐỘNG ANDROID (Dành cho Sinh viên)
 
-**Thư mục:** `App/`  
-**Vai trò:** Dành riêng cho Sinh viên
+Ứng dụng được thiết kế theo kiến trúc **Single Activity - Multiple Fragments** với **Navigation Drawer (Sidebar)** giúp trải nghiệm mượt mà và hiện đại.
 
-**Chức năng:**
-1. **Đăng nhập** bằng tài khoản sinh viên (JWT)
-2. **Đăng ký khuôn mặt** (một lần, dùng camera trước)
-3. **Xem lịch học** — hiển thị các lớp mở điểm danh hôm nay
-4. **Tự điểm danh:**
-   - Chụp ảnh khuôn mặt
-   - Gửi lên BE → BE gọi AI xác minh → Kiểm tra GPS
-   - Nhận kết quả: Thành công / Thất bại (kèm lý do)
-5. **Xem lịch sử điểm danh** của bản thân
+### 6.1. Cấu trúc Điều hướng (Sidebar Navigation)
+- **Trang chủ (Home):** Các phím tắt nhanh (Điểm danh, Đăng ký khuôn mặt, Lịch sử).
+- **Lịch học trong tuần:** Xem thời khóa biểu cá nhân được phân nhóm theo ngày.
+- **Cài đặt:** Quản lý thông tin cá nhân và tài khoản.
+- **Đăng xuất:** Thoát khỏi hệ thống và xóa session JWT.
+
+### 6.2. Tính năng Trọng tâm
+1. **Đăng ký/Cập nhật khuôn mặt:** 
+   - Chụp ảnh chân dung trực tiếp.
+   - Server gọi AI Service để tách đặc trưng (128 vector) và lưu vào DB.
+2. **Điểm danh thông minh:**
+   - Tự động nhận diện môn học đang diễn ra.
+   - Bắt buộc kiểm tra GPS (Geofencing) trong bán kính cho phép của phòng học.
+   - Chụp ảnh xác thực khuôn mặt AI (ngăn chặn điểm danh hộ bằng ảnh chụp lại).
+3. **Xem lịch học:**
+   - Giao diện trực quan, chia theo ngày như bản Web.
+   - Hỗ trợ vuốt chạm mượt mà để xem danh sách dài.
 
 ---
 
