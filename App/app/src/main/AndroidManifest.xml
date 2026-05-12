@@ -22,7 +22,7 @@
         <activity android:name=".activity.RegisterFaceActivity"/>
         <activity android:name=".activity.UpdateFaceActivity"/>
         <activity android:name=".activity.ChangePasswordActivity"/>
-        <activity android:name=".activity.SettingsActivity"/>
+
         <activity android:name=".activity.MainActivity"/>
 
         <activity

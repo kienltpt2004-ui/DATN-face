@@ -62,17 +62,44 @@
 
         </androidx.cardview.widget.CardView>
 
-        <!-- Spinner Section -->
-        <Spinner
-            android:id="@+id/spinnerSchedule"
+        <!-- Active Class Card -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/cardActiveClass"
             android:layout_width="0dp"
-            android:layout_height="56dp"
+            android:layout_height="wrap_content"
             android:layout_marginHorizontal="24dp"
             android:layout_marginTop="32dp"
-            android:background="@android:drawable/btn_dropdown"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/cardPreview" />
+            app:layout_constraintTop_toBottomOf="@id/cardPreview">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:id="@+id/tvActiveSubject"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Đang tải môn học..."
+                    android:textColor="@color/text_main"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvActiveTime"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="--"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
 
         <!-- Buttons -->
         <com.google.android.material.button.MaterialButton
@@ -88,7 +115,7 @@
             app:strokeColor="@color/primary"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/spinnerSchedule" />
+            app:layout_constraintTop_toBottomOf="@id/cardActiveClass" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAttendance"

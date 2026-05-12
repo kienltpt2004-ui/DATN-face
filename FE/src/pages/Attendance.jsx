@@ -81,9 +81,9 @@ export function Attendance({ user }) {
                 const currentMinutes = now.getHours() * 60 + now.getMinutes();
                 
                 const within = classSchedule.some(s => {
+                    const [sh, sm] = s.startTime.split(':').map(Number);
                     const startMinForVisibility = sh * 60 + sm - 15; // Hiện lớp trước 15p
                     const startMinForCheckin = sh * 60 + sm;      // Chỉ cho điểm danh từ lúc bắt đầu
-                    const endMin = sh * 60 + sm + 30;
                     
                     // Để hiện lớp trong danh sách: dùng startMinForVisibility
                     // Nhưng để cho phép nút Lưu/Trạng thái: có thể dùng logic khác

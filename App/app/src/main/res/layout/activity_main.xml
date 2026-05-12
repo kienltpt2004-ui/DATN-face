@@ -1,129 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
+<androidx.drawerlayout.widget.DrawerLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/drawer_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background">
+    tools:openDrawer="start">
 
-    <!-- Header Background -->
-    <View
-        android:id="@+id/headerBg"
+    <!-- Main Content -->
+    <androidx.coordinatorlayout.widget.CoordinatorLayout
         android:layout_width="match_parent"
-        android:layout_height="200dp"
-        android:background="@color/primary"
-        app:layout_constraintTop_toTopOf="parent" />
+        android:layout_height="match_parent">
 
-    <!-- Title -->
-    <TextView
-        android:id="@+id/tvTitle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Xin chào, Sinh viên"
-        android:textColor="@color/white"
-        android:textSize="26sp"
-        android:textStyle="bold"
-        android:layout_marginTop="64dp"
-        android:layout_marginStart="24dp"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <TextView
-        android:id="@+id/tvSubtitle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Quản lý điểm danh sinh trắc học"
-        android:textColor="@color/primary_light"
-        android:textSize="16sp"
-        android:layout_marginTop="8dp"
-        android:layout_marginStart="24dp"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tvTitle" />
-
-    <!-- Main Container -->
-    <androidx.cardview.widget.CardView
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginTop="24dp"
-        android:layout_marginHorizontal="20dp"
-        android:layout_marginBottom="24dp"
-        app:cardCornerRadius="24dp"
-        app:cardElevation="8dp"
-        app:layout_constraintTop_toBottomOf="@id/tvSubtitle"
-        app:layout_constraintBottom_toBottomOf="parent">
-
-        <androidx.constraintlayout.widget.ConstraintLayout
+        <com.google.android.material.appbar.AppBarLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent">
+            android:layout_height="wrap_content"
+            app:elevation="0dp"
+            android:background="@color/primary"
+            android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar">
 
-            <ImageButton
-                android:id="@+id/btnSettings"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginTop="8dp"
-                android:layout_marginStart="8dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/ic_settings_custom"
-                android:scaleType="fitCenter"
-                android:padding="4dp"
-                app:tint="@null"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
-
-            <LinearLayout
+            <androidx.appcompat.widget.Toolbar
+                android:id="@+id/toolbar"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:orientation="vertical"
-                android:padding="32dp"
-                android:gravity="center_vertical"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent">
+                android:layout_height="?attr/actionBarSize"
+                app:titleTextColor="@color/white"
+                android:background="@color/primary"
+                app:popupTheme="@style/ThemeOverlay.AppCompat.Light" />
+        </com.google.android.material.appbar.AppBarLayout>
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnAttendance"
-                    android:layout_width="match_parent"
-                    android:layout_height="64dp"
-                    android:text="Điểm danh ngay"
-                    android:textSize="16sp"
-                    app:cornerRadius="12dp"
-                    app:backgroundTint="@color/primary" />
+        <FrameLayout
+            android:id="@+id/fragment_container"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:layout_behavior="@string/appbar_scrolling_view_behavior" />
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnHistory"
-                    android:layout_width="match_parent"
-                    android:layout_height="64dp"
-                    android:layout_marginTop="16dp"
-                    android:text="Lịch sử điểm danh"
-                    android:textSize="16sp"
-                    app:cornerRadius="12dp"
-                    app:backgroundTint="@color/success" />
+    </androidx.coordinatorlayout.widget.CoordinatorLayout>
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnRegisterFace"
-                    android:layout_width="match_parent"
-                    android:layout_height="64dp"
-                    android:layout_marginTop="16dp"
-                    android:text="Đăng ký khuôn mặt"
-                    android:textColor="@color/primary"
-                    android:textSize="16sp"
-                    app:cornerRadius="12dp"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    app:strokeColor="@color/primary" />
+    <!-- Sidebar Navigation -->
+    <com.google.android.material.navigation.NavigationView
+        android:id="@+id/nav_view"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:fitsSystemWindows="true"
+        app:menu="@menu/nav_menu" />
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnUpdateFace"
-                    android:layout_width="match_parent"
-                    android:layout_height="64dp"
-                    android:layout_marginTop="16dp"
-                    android:text="Cập nhật khuôn mặt"
-                    android:textColor="@color/warning"
-                    android:textSize="16sp"
-                    app:cornerRadius="12dp"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    app:strokeColor="@color/warning" />
-
-            </LinearLayout>
-        </androidx.constraintlayout.widget.ConstraintLayout>
-    </androidx.cardview.widget.CardView>
-
-</androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.drawerlayout.widget.DrawerLayout>

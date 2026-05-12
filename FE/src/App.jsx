@@ -27,14 +27,14 @@ const PAGE_COMPONENTS = {
 
 export default function App() {
     const [user, setUser] = useState(() => {
-        const saved = localStorage.getItem('attendance_user');
+        const saved = sessionStorage.getItem('attendance_user');
         return saved ? JSON.parse(saved) : null;
     });
     const [currentPage, setCurrentPage] = useState('dashboard');
 
     useEffect(() => {
         if (user) {
-            localStorage.setItem('attendance_user', JSON.stringify(user));
+            sessionStorage.setItem('attendance_user', JSON.stringify(user));
 
             const role = user.role?.toLowerCase();
             // Redirect admin/teacher to valid pages if they are on a restricted page
@@ -47,20 +47,20 @@ export default function App() {
                 }
             }
         } else {
-            localStorage.removeItem('attendance_user');
+            sessionStorage.removeItem('attendance_user');
         }
     }, [user, currentPage]);
 
     const handleLogout = () => {
         setUser(null);
         setCurrentPage('dashboard');
-        localStorage.removeItem('attendance_user');
+        sessionStorage.removeItem('attendance_user');
     };
 
     // 1. Lớp bảo vệ: Chưa đăng nhập
     if (!user) {
         return <Login onLogin={(u) => {
-            localStorage.setItem('attendance_user', JSON.stringify(u));
+            sessionStorage.setItem('attendance_user', JSON.stringify(u));
             setUser(u);
             // Default page based on role
             if (u.role?.toLowerCase() === 'admin') setCurrentPage('teachers');

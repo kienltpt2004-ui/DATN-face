@@ -44,6 +44,9 @@ public interface ApiService {
     @GET("students/me/schedules/available")
     Call<ApiResponse<List<com.example.cdtn.model.AvailableSchedule>>> getAvailableSchedules();
 
+    @GET("students/me/schedules")
+    Call<ApiResponse<List<com.example.cdtn.model.ScheduleDTO>>> getMyWeeklySchedules();
+
     @POST("users/change-password")
     Call<ApiResponse<Object>> changePassword(@Body java.util.Map<String, String> request);
 }

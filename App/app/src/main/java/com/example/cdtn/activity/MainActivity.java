@@ -1,50 +1,76 @@
 package com.example.cdtn.activity;
 
-import android.content.Intent;
 import android.os.Bundle;
-import android.widget.Button;
+import android.view.MenuItem;
 
-import androidx.activity.EdgeToEdge;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.ActionBarDrawerToggle;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
+import androidx.core.view.GravityCompat;
+import androidx.drawerlayout.widget.DrawerLayout;
+import androidx.fragment.app.Fragment;
 
 import com.example.cdtn.R;
+import com.example.cdtn.fragment.HomeFragment;
+import com.example.cdtn.fragment.ScheduleFragment;
+import com.example.cdtn.fragment.SettingsFragment;
+import com.google.android.material.navigation.NavigationView;
 
+public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
 
-public class MainActivity extends AppCompatActivity {
+    private DrawerLayout drawerLayout;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
 
-        com.example.cdtn.utils.SharedPrefManager pref = new com.example.cdtn.utils.SharedPrefManager(this);
-        android.widget.TextView tvTitle = findViewById(R.id.tvTitle);
-        tvTitle.setText("Xin chào, " + pref.getName());
+        Toolbar toolbar = findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
 
-        Button btnRegister = findViewById(R.id.btnRegisterFace);
-        Button btnUpdate = findViewById(R.id.btnUpdateFace);
-        Button btnAttendance = findViewById(R.id.btnAttendance);
-        Button btnHistory = findViewById(R.id.btnHistory);
+        drawerLayout = findViewById(R.id.drawer_layout);
+        NavigationView navigationView = findViewById(R.id.nav_view);
+        navigationView.setNavigationItemSelectedListener(this);
 
-        btnRegister.setOnClickListener(v -> {
-            startActivity(new Intent(this, RegisterFaceActivity.class));
-        });
+        ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(this, drawerLayout, toolbar, 
+            R.string.navigation_drawer_open, R.string.navigation_drawer_close);
+        drawerLayout.addDrawerListener(toggle);
+        toggle.syncState();
 
-        btnUpdate.setOnClickListener(v -> {
-            startActivity(new Intent(this, UpdateFaceActivity.class));
-        });
+        if (savedInstanceState == null) {
+            getSupportFragmentManager().beginTransaction().replace(R.id.fragment_container, new HomeFragment()).commit();
+            navigationView.setCheckedItem(R.id.nav_home);
+        }
+    }
 
-        btnAttendance.setOnClickListener(v -> {
-            startActivity(new Intent(this, AttendanceActivity.class));
-        });
+    @Override
+    public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+        Fragment selectedFragment = null;
+        int itemId = item.getItemId();
 
-        btnHistory.setOnClickListener(v -> {
-            startActivity(new Intent(this, HistoryActivity.class));
-        });
+        if (itemId == R.id.nav_home) {
+            selectedFragment = new HomeFragment();
+        } else if (itemId == R.id.nav_schedule) {
+            selectedFragment = new ScheduleFragment();
+        } else if (itemId == R.id.nav_settings) {
+            selectedFragment = new SettingsFragment();
+        }
 
-        findViewById(R.id.btnSettings).setOnClickListener(v -> {
-            startActivity(new Intent(this, SettingsActivity.class));
-        });
+        if (selectedFragment != null) {
+            getSupportFragmentManager().beginTransaction().replace(R.id.fragment_container, selectedFragment).commit();
+        }
+
+        drawerLayout.closeDrawer(GravityCompat.START);
+        return true;
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            drawerLayout.closeDrawer(GravityCompat.START);
+        } else {
+            super.onBackPressed();
+        }
     }
 }

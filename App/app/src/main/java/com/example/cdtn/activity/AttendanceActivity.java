@@ -11,6 +11,7 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.Spinner;
+import android.widget.TextView;
 import android.widget.Toast;
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -55,8 +56,8 @@ public class AttendanceActivity extends AppCompatActivity {
     private static final int REQUEST_CHECK_SETTINGS = 102;
 
     private Bitmap bitmap;
-    private Spinner spinnerSchedule;
-    private List<AvailableSchedule> availableSchedules = new ArrayList<>();
+    private TextView tvActiveSubject, tvActiveTime;
+    private AvailableSchedule activeSchedule;
     private Button btnAttendance;
     private FusedLocationProviderClient fusedLocationClient;
 
@@ -67,7 +68,8 @@ public class AttendanceActivity extends AppCompatActivity {
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
 
-        spinnerSchedule = findViewById(R.id.spinnerSchedule);
+        tvActiveSubject = findViewById(R.id.tvActiveSubject);
+        tvActiveTime = findViewById(R.id.tvActiveTime);
         ImageView imageView = findViewById(R.id.imageView);
         Button btnCapture = findViewById(R.id.btnCapture);
         btnAttendance = findViewById(R.id.btnAttendance);
@@ -82,15 +84,13 @@ public class AttendanceActivity extends AppCompatActivity {
                 return;
             }
 
-            if (spinnerSchedule.getSelectedItem() == null) {
-                Toast.makeText(this, "Vui lòng chọn môn học", Toast.LENGTH_SHORT).show();
+            if (activeSchedule == null) {
+                Toast.makeText(this, "Không có môn học đang mở", Toast.LENGTH_SHORT).show();
                 return;
             }
 
-            AvailableSchedule selected = (AvailableSchedule) spinnerSchedule.getSelectedItem();
             String base64 = ImageUtils.bitmapToBase64(bitmap);
-
-            requestLocationAndSend(base64, selected.getScheduleId());
+            requestLocationAndSend(base64, activeSchedule.getScheduleId());
         });
 
         loadAvailableSchedules();
@@ -207,16 +207,16 @@ public class AttendanceActivity extends AppCompatActivity {
             @Override
             public void onResponse(Call<ApiResponse<List<AvailableSchedule>>> call, Response<ApiResponse<List<AvailableSchedule>>> response) {
                 if (response.isSuccessful() && response.body() != null) {
-                    availableSchedules = response.body().getData();
-                    if (availableSchedules != null && !availableSchedules.isEmpty()) {
-                        ArrayAdapter<AvailableSchedule> adapter = new ArrayAdapter<>(
-                                AttendanceActivity.this,
-                                android.R.layout.simple_spinner_item,
-                                availableSchedules
-                        );
-                        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-                        spinnerSchedule.setAdapter(adapter);
+                    List<AvailableSchedule> list = response.body().getData();
+                    if (list != null && !list.isEmpty()) {
+                        activeSchedule = list.get(0); // Lấy môn học đầu tiên đang mở
+                        tvActiveSubject.setText(activeSchedule.getSubject());
+                        tvActiveTime.setText(activeSchedule.getTimeRange());
                         btnAttendance.setEnabled(true);
+                    } else {
+                        tvActiveSubject.setText("Hiện không có môn học nào mở điểm danh");
+                        tvActiveTime.setText("Vui lòng quay lại sau");
+                        btnAttendance.setEnabled(false);
                     }
                 }
             }

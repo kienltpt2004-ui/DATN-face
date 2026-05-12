@@ -113,12 +113,12 @@ export function Settings({ user: currentUser }) {
                     email: settings.email || ''
                 });
                 
-                // Cập nhật localStorage để đồng bộ giao diện
-                const user = JSON.parse(localStorage.getItem('attendance_user'));
+                // Cập nhật sessionStorage để đồng bộ giao diện
+                const user = JSON.parse(sessionStorage.getItem('attendance_user'));
                 if (user) {
                     user.name = settings.name;
                     user.email = settings.email;
-                    localStorage.setItem('attendance_user', JSON.stringify(user));
+                    sessionStorage.setItem('attendance_user', JSON.stringify(user));
                     
                     // Cập nhật tên trong danh sách Người dùng (nếu đang hiển thị)
                     setUserList(prev => prev.map(u => 

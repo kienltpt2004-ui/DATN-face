@@ -190,4 +190,36 @@ public class StudentController {
                 new ApiResponse<>("Lấy danh sách lịch học mở điểm danh thành công", "SUCCESS", "", schedules)
         );
     }
+
+    @GetMapping("/me/schedules")
+    public ResponseEntity<ApiResponse<List<com.attendance.backend.dto.ScheduleDTO>>> getMyWeeklySchedules(
+            org.springframework.security.core.Authentication authentication
+    ) {
+        String studentId = authentication.getName();
+        com.attendance.backend.dto.StudentDTO student = studentService.getStudentById(studentId);
+        
+        List<com.attendance.backend.dto.ScheduleDTO> schedules = new java.util.ArrayList<>();
+        if (student.getClassId() != null && !student.getClassId().trim().isEmpty()) {
+            java.util.List<String> classIds = java.util.Arrays.stream(student.getClassId().split(","))
+                    .map(String::trim).filter(s -> !s.isEmpty()).toList();
+            for (String classId : classIds) {
+                schedules.addAll(scheduleRepository.findByClassId(classId).stream()
+                        .map(s -> com.attendance.backend.dto.ScheduleDTO.builder()
+                                .id(s.getId())
+                                .classId(s.getClassId())
+                                .subject(s.getSubject())
+                                .teacherId(s.getTeacherId())
+                                .dayOfWeek(s.getDayOfWeek())
+                                .startTime(s.getStartTime())
+                                .endTime(s.getEndTime())
+                                .room(s.getRoom())
+                                .locationId(s.getLocationId())
+                                .build())
+                        .toList());
+            }
+        }
+        return ResponseEntity.ok(
+                new ApiResponse<>("Lấy danh sách lịch học trong tuần thành công", "SUCCESS", "", schedules)
+        );
+    }
 }

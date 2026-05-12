@@ -1,7 +1,7 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8002/api';
 
 const getAuthHeader = () => {
-    const user = JSON.parse(localStorage.getItem('attendance_user'));
+    const user = JSON.parse(sessionStorage.getItem('attendance_user'));
     if (user && user.token) {
         return { 'Authorization': `Bearer ${user.token}` };
     }
