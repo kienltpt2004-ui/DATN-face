@@ -18,8 +18,11 @@ export function Login({ onLogin }) {
                 username: id.trim(),
                 password: password.trim()
             });
-            
             // Backend returns: { token, tokenType, id, username, name, role, email }
+            if (data.role?.toLowerCase() === 'student') {
+                setError('Sinh viên vui lòng sử dụng ứng dụng di động để đăng nhập.');
+                return;
+            }
             onLogin(data);
         } catch (err) {
             setError(err.message || 'Tài khoản hoặc mật khẩu không chính xác.');
