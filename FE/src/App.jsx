@@ -36,11 +36,7 @@ export default function App() {
             sessionStorage.setItem('attendance_user', JSON.stringify(user));
 
             const role = user.role?.toLowerCase();
-            // Redirect admin/teacher to valid pages if they are on a restricted page
-            if (role === 'admin') {
-                // Admin không có trang attendance riêng, đã được xử lý ở sidebar
-            } else if (role === 'teacher') {
-                // Giáo viên không được vào trang quản lý người dùng và cài đặt hệ thống
+            if (role === 'teacher') {
                 if (['teachers', 'locations'].includes(currentPage)) {
                     setCurrentPage('dashboard');
                 }
@@ -56,18 +52,16 @@ export default function App() {
         sessionStorage.removeItem('attendance_user');
     };
 
-    // 1. Lớp bảo vệ: Chưa đăng nhập
     if (!user) {
-        return <Login onLogin={(u) => {
-            sessionStorage.setItem('attendance_user', JSON.stringify(u));
-            setUser(u);
-            // Default page based on role
-            if (u.role?.toLowerCase() === 'admin') setCurrentPage('teachers');
-            else setCurrentPage('dashboard');
-        }} />;
+        return (
+            <Login onLogin={(u) => {
+                sessionStorage.setItem('attendance_user', JSON.stringify(u));
+                setUser(u);
+                setCurrentPage('dashboard');
+            }} />
+        );
     }
 
-    // 2. Dashboard dành cho học sinh - Đã gỡ bỏ, sinh viên sử dụng Mobile App
     if (user.role?.toLowerCase() === 'student') {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
@@ -90,7 +84,6 @@ export default function App() {
         );
     }
 
-    // 3. Giao diện dành cho Admin/Giáo viên
     const PageComponent = PAGE_COMPONENTS[currentPage] || Dashboard;
 
     return (

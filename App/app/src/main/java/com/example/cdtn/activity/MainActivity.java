@@ -38,6 +38,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         drawerLayout.addDrawerListener(toggle);
         toggle.syncState();
 
+        // Cập nhật thông tin trên Header của Sidebar
+        com.example.cdtn.utils.SharedPrefManager pref = new com.example.cdtn.utils.SharedPrefManager(this);
+        android.view.View headerView = navigationView.getHeaderView(0);
+        android.widget.TextView tvUserRole = headerView.findViewById(R.id.tvUserRole);
+        if (tvUserRole != null) {
+            tvUserRole.setText(pref.getName());
+        }
+
         if (savedInstanceState == null) {
             getSupportFragmentManager().beginTransaction().replace(R.id.fragment_container, new HomeFragment()).commit();
             navigationView.setCheckedItem(R.id.nav_home);

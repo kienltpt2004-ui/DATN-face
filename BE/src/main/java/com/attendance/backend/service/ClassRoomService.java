@@ -60,7 +60,9 @@ public class ClassRoomService {
 
     @Transactional
     public List<ClassRoom> createClassesBulk(List<ClassRoom> classes) {
-        return classes.stream().map(this::create).toList();
+        return classes.stream()
+                        .map(this::create)
+                        .toList();
     }
 
     @Transactional
