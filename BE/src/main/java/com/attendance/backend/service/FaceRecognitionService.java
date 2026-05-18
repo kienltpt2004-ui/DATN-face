@@ -2,8 +2,8 @@ package com.attendance.backend.service;
 
 import com.attendance.backend.entity.Student;
 import com.attendance.backend.repository.StudentRepository;
+import com.attendance.backend.utils.TimeUtils;
 import java.util.*;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -16,80 +16,49 @@ public class FaceRecognitionService {
     @Value("${ai.service.url}")
     private String aiServiceUrl;
 
-    private final RestTemplate restTemplate = new RestTemplate();
-
-    @Autowired
-    private StudentRepository studentRepository;
+    private final RestTemplate restTemplate;
+    private final StudentRepository studentRepository;
 
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(FaceRecognitionService.class);
 
-    // --- Các hàm hỗ trợ cũ để sửa lỗi build ---
-    public String getFaceEmbedding(org.springframework.web.multipart.MultipartFile file) {
-        try {
-            byte[] bytes = file.getBytes();
-            String base64 = Base64.getEncoder().encodeToString(bytes);
-            return getFaceEmbeddingFromBase64(base64);
-        } catch (Exception e) {
-            throw new RuntimeException("Lỗi xử lý file: " + e.getMessage());
-        }
+    public FaceRecognitionService(RestTemplate restTemplate, StudentRepository studentRepository) {
+        this.restTemplate = restTemplate;
+        this.studentRepository = studentRepository;
     }
-
-    public String getFaceEmbedding(String base64Image) {
-        return getFaceEmbeddingFromBase64(base64Image);
-    }
-
-    private String getFaceEmbeddingFromBase64(String base64Image) {
-        String url = aiServiceUrl + "/face/register";
-        Map<String, String> body = new HashMap<>();
-        body.put("image", base64Image);
-        try {
-            ResponseEntity<Map> response = restTemplate.postForEntity(url, body, Map.class);
-            if (response.getBody() != null && response.getBody().containsKey("embedding")) {
-                return response.getBody().get("embedding").toString();
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Lỗi AI: " + e.getMessage());
-        }
-        return null;
-    }
-
-    public Map<String, Object> verifyFace(org.springframework.web.multipart.MultipartFile file, String storedEmbedding) {
-        try {
-            byte[] bytes = file.getBytes();
-            String base64 = Base64.getEncoder().encodeToString(bytes);
-            return verifyFace(base64, storedEmbedding);
-        } catch (Exception e) {
-            throw new RuntimeException("Lỗi xử lý file: " + e.getMessage());
-        }
-    }
-    // --- Kết thúc các hàm hỗ trợ cũ ---
 
     @Transactional
     public void registerFace(String studentId, String base64Image) {
         logger.info("[DEBUG] Đang đăng ký khuôn mặt cho SV: {}", studentId);
-        
+
         String url = aiServiceUrl + "/face/register";
-        
         Map<String, String> body = new HashMap<>();
         body.put("image", base64Image);
 
         try {
-            logger.info("[DEBUG] Gọi API Postman URL: {}", url);
+            logger.info("[DEBUG] Gọi API URL: {}", url);
             ResponseEntity<Map> response = restTemplate.postForEntity(url, body, Map.class);
-            
-            if (response.getBody() != null && response.getBody().containsKey("embedding")) {
-                List<Double> embeddingList = (List<Double>) response.getBody().get("embedding");
-                String embeddingStr = embeddingList.toString();
-                
-                Student student = studentRepository.findById(studentId)
-                        .orElseThrow(() -> new RuntimeException("Không tìm thấy sinh viên: " + studentId));
-                
-                student.setFaceEmbedding(embeddingStr);
-                studentRepository.save(student);
-                logger.info("[DEBUG] Đăng ký THÀNH CÔNG cho SV: {}. Embedding: {}", studentId, embeddingStr);
-            } else {
+
+            if (response.getBody() == null || !response.getBody().containsKey("embedding")) {
                 throw new RuntimeException("AI response không chứa embedding");
             }
+
+            Object rawEmbedding = response.getBody().get("embedding");
+            if (!(rawEmbedding instanceof List)) {
+                throw new RuntimeException("Embedding từ AI không đúng định dạng (phải là mảng)");
+            }
+            List<?> embeddingList = (List<?>) rawEmbedding;
+            if (embeddingList.isEmpty()) {
+                throw new RuntimeException("Embedding từ AI trả về rỗng");
+            }
+
+            String embeddingStr = embeddingList.toString();
+
+            Student student = studentRepository.findById(studentId)
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy sinh viên: " + studentId));
+
+            student.setFaceEmbedding(embeddingStr);
+            studentRepository.save(student);
+            logger.info("[DEBUG] Đăng ký THÀNH CÔNG cho SV: {}. Số chiều embedding: {}", studentId, embeddingList.size());
         } catch (Exception e) {
             logger.error("[DEBUG] Lỗi đăng ký: {}", e.getMessage());
             throw new RuntimeException("Lỗi kết nối AI Service: " + e.getMessage());
@@ -98,32 +67,22 @@ public class FaceRecognitionService {
 
     public Map<String, Object> verifyFace(String base64Image, String storedEmbedding) {
         String url = aiServiceUrl + "/face/verify";
-        logger.info("[DEBUG] Gọi API Xác thực Postman URL: {}", url);
+        logger.info("[DEBUG] Gọi API Xác thực URL: {}", url);
 
         Map<String, Object> body = new HashMap<>();
         body.put("image", base64Image);
-        
-        // Convert "[0.1, 0.2, ...]" -> List<Double>
-        String clean = storedEmbedding.replace("[", "").replace("]", "");
-        String[] parts = clean.split(",");
-        List<Double> embeddingList = new ArrayList<>();
-        for (String p : parts) {
-            embeddingList.add(Double.parseDouble(p.trim()));
-        }
-        body.put("embedding", embeddingList);
+        body.put("embedding", parseEmbedding(storedEmbedding));
 
         try {
             ResponseEntity<Map> response = restTemplate.postForEntity(url, body, Map.class);
+            if (response.getBody() == null) {
+                throw new RuntimeException("AI service trả về response rỗng");
+            }
             return response.getBody();
         } catch (Exception e) {
             logger.error("[DEBUG] Lỗi xác thực: {}", e.getMessage());
             throw new RuntimeException("Lỗi xác thực khuôn mặt: " + e.getMessage());
         }
-    }
-
-    @Transactional
-    public void updateFace(String studentId, String base64Image) {
-        registerFace(studentId, base64Image);
     }
 
     public String findMatchingStudent(String base64Image, List<Student> galleryStudents) {
@@ -146,8 +105,15 @@ public class FaceRecognitionService {
 
         try {
             ResponseEntity<Map> response = restTemplate.postForEntity(url, body, Map.class);
-            if (response.getBody() != null && (Boolean) response.getBody().get("found")) {
-                return (String) response.getBody().get("id");
+            if (response.getBody() != null && Boolean.TRUE.equals(response.getBody().get("found"))) {
+                String matchedId = (String) response.getBody().get("id");
+                // Xác nhận ID trả về thực sự tồn tại trong gallery
+                boolean validId = galleryStudents.stream().anyMatch(s -> s.getId().equals(matchedId));
+                if (!validId) {
+                    logger.warn("AI trả về studentId '{}' không có trong gallery", matchedId);
+                    return null;
+                }
+                return matchedId;
             }
         } catch (Exception e) {
             logger.error("Lỗi khi tìm khuôn mặt khớp: {}", e.getMessage());
@@ -156,12 +122,21 @@ public class FaceRecognitionService {
     }
 
     private List<Double> parseEmbedding(String storedEmbedding) {
-        String clean = storedEmbedding.replace("[", "").replace("]", "");
-        String[] parts = clean.split(",");
-        List<Double> embeddingList = new ArrayList<>();
-        for (String p : parts) {
-            embeddingList.add(Double.parseDouble(p.trim()));
+        if (storedEmbedding == null || storedEmbedding.isBlank()) {
+            throw new RuntimeException("Embedding rỗng hoặc null");
         }
-        return embeddingList;
+        String clean = storedEmbedding.replace("[", "").replace("]", "").trim();
+        List<Double> result = new ArrayList<>();
+        for (String p : clean.split(",")) {
+            try {
+                result.add(Double.parseDouble(p.trim()));
+            } catch (NumberFormatException e) {
+                throw new RuntimeException("Embedding có giá trị không hợp lệ: '" + p.trim() + "'");
+            }
+        }
+        if (result.isEmpty()) {
+            throw new RuntimeException("Embedding không có dữ liệu sau khi parse");
+        }
+        return result;
     }
 }

@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
+// import java.util.Map;
 
 import com.attendance.backend.dto.AttendanceRequest;
 import com.attendance.backend.dto.ApiResponse;
@@ -34,7 +34,8 @@ public class AttendanceController {
 
     /**
      * GET /api/attendance?classId=...&date=yyyy-MM-dd
-     * Lấy danh sách điểm danh theo lớp và ngày
+     * Lấy danh sách điểm danh theo lớp và ngày.
+     * TEACHER chỉ thấy bản ghi từ lịch dạy của mình.
      */
     @GetMapping
     public ResponseEntity<List<AttendanceRecordDTO>> getByClassAndDate(
@@ -42,7 +43,11 @@ public class AttendanceController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             org.springframework.security.core.Authentication authentication) {
         checkAccess(classId, authentication);
-        return ResponseEntity.ok(attendanceService.getByClassAndDate(classId, date));
+        if (isAdmin(authentication)) {
+            return ResponseEntity.ok(attendanceService.getByClassAndDate(classId, date));
+        }
+        String teacherId = resolveTeacherId(authentication);
+        return ResponseEntity.ok(attendanceService.getByClassAndDateForTeacher(classId, date, teacherId));
     }
 
     /**
@@ -59,7 +64,8 @@ public class AttendanceController {
 
     /**
      * GET /api/attendance/class/{classId}/report?from=...&to=...
-     * Báo cáo điểm danh cả lớp trong khoảng thời gian
+     * Báo cáo điểm danh cả lớp trong khoảng thời gian.
+     * ADMIN: tất cả dữ liệu. TEACHER: chỉ buổi do mình dạy.
      */
     @GetMapping("/class/{classId}/report")
     @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
@@ -68,10 +74,14 @@ public class AttendanceController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             org.springframework.security.core.Authentication authentication) {
-        
+
         checkAccess(classId, authentication);
-        
-        return ResponseEntity.ok(attendanceService.getByClassAndDateRange(classId, from, to));
+
+        if (isAdmin(authentication)) {
+            return ResponseEntity.ok(attendanceService.getByClassAndDateRange(classId, from, to));
+        }
+        String teacherId = resolveTeacherId(authentication);
+        return ResponseEntity.ok(attendanceService.getByClassAndDateRangeForTeacher(classId, from, to, teacherId));
     }
 
     /**
@@ -104,31 +114,30 @@ public class AttendanceController {
         return ResponseEntity.ok(attendanceService.updateRecord(id, dto));
     }
 
-    private void checkAccess(String classId, org.springframework.security.core.Authentication authentication) {
-        boolean isAdmin = authentication.getAuthorities().stream()
+    private boolean isAdmin(org.springframework.security.core.Authentication authentication) {
+        return authentication.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ADMIN"));
-        
-        if (!isAdmin) {
-            String username = authentication.getName(); // Username
-            
-            // Kiểm tra xem giáo viên có dạy lớp này trong Schedule không (bằng username)
-            boolean isAssigned = scheduleRepository.findByTeacherIdIgnoreCase(username).stream()
-                    .anyMatch(s -> s.getClassId().equalsIgnoreCase(classId));
-            
-            // Fallback: Kiểm tra bằng profile ID nếu không tìm thấy bằng username
-            if (!isAssigned) {
-                String profileId = teacherRepository.findByUsernameOrId(username)
-                        .map(com.attendance.backend.entity.Teacher::getId).orElse(username);
-                
-                if (!profileId.equals(username)) {
-                    isAssigned = scheduleRepository.findByTeacherIdIgnoreCase(profileId).stream()
-                            .anyMatch(s -> s.getClassId().equalsIgnoreCase(classId));
-                }
-            }
-            
-            if (!isAssigned) {
-                throw new RuntimeException("Bạn không được phân công dạy môn học " + classId + ". Vui lòng liên hệ Admin.");
-            }
+    }
+
+    /** Trả về teacherId đã resolve (username hoặc profileId) của giáo viên đang đăng nhập */
+    private String resolveTeacherId(org.springframework.security.core.Authentication authentication) {
+        String username = authentication.getName();
+        boolean hasByUsername = !scheduleRepository.findByTeacherIdIgnoreCase(username).isEmpty();
+        if (hasByUsername) return username;
+        return teacherRepository.findByUsernameOrId(username)
+                .map(com.attendance.backend.entity.Teacher::getId)
+                .orElse(username);
+    }
+
+    private void checkAccess(String classId, org.springframework.security.core.Authentication authentication) {
+        if (isAdmin(authentication)) return;
+
+        String teacherId = resolveTeacherId(authentication);
+        boolean isAssigned = scheduleRepository.findByTeacherIdIgnoreCase(teacherId).stream()
+                .anyMatch(s -> s.getClassId().equalsIgnoreCase(classId));
+
+        if (!isAssigned) {
+            throw new RuntimeException("Bạn không được phân công dạy môn học " + classId + ". Vui lòng liên hệ Admin.");
         }
     }
 

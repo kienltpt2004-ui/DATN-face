@@ -57,12 +57,7 @@ public class ClassRoomController {
                 
                 if (classIds.isEmpty()) return ResponseEntity.ok(java.util.Collections.emptyList());
 
-                List<ClassRoom> teacherClasses = classIds.stream()
-                        .map(id -> {
-                            try { return classRoomService.getById(id); } catch (Exception e) { return null; }
-                        })
-                        .filter(java.util.Objects::nonNull)
-                        .toList();
+                List<ClassRoom> teacherClasses = classRoomService.getByIds(classIds);
                 return ResponseEntity.ok(teacherClasses);
             } else {
                 // Logic cho Học sinh: Lấy các lớp mà học sinh này tham gia

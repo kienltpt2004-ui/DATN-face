@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 import { 
-    School, Bell, Shield, Palette, Check, ShieldAlert, Users, 
-    Lock, Mail, User, Eye, EyeOff, MapPin, Cpu, Camera, 
+    School, Bell, Shield, Palette, Check, ShieldAlert, Users,
+    Lock, Mail, User, Eye, EyeOff, MapPin, Camera,
     Clock, Calendar, Trash2, Edit2, UserMinus, UserCheck, Search, Loader2
 } from 'lucide-react';
 
@@ -29,12 +29,6 @@ export function Settings({ user: currentUser }) {
         requireFace: true,
         allowLate: true,
         allowReAttendance: false,
-        
-        // AI Config
-        confidenceThreshold: 0.85,
-        aiEnabled: true,
-        maxRetries: 3,
-        saveFaceImages: true,
         
         // General
         schoolName: 'Attendance AI School',
@@ -63,10 +57,6 @@ export function Settings({ user: currentUser }) {
                     requireFace: configData.requireFace === 'true',
                     allowLate: configData.allowLate === 'true',
                     allowReAttendance: configData.allowReAttendance === 'true',
-                    confidenceThreshold: parseFloat(configData.confidenceThreshold) || prev.confidenceThreshold,
-                    aiEnabled: configData.aiEnabled === 'true',
-                    maxRetries: parseInt(configData.maxRetries) || prev.maxRetries,
-                    saveFaceImages: configData.saveFaceImages === 'true',
                     schoolName: configData.schoolName || prev.schoolName,
                 }));
             }
@@ -141,10 +131,6 @@ export function Settings({ user: currentUser }) {
                         requireFace: (settings.requireFace ?? true).toString(),
                         allowLate: (settings.allowLate ?? true).toString(),
                         allowReAttendance: (settings.allowReAttendance ?? false).toString(),
-                        confidenceThreshold: (settings.confidenceThreshold ?? 0.85).toString(),
-                        aiEnabled: (settings.aiEnabled ?? true).toString(),
-                        maxRetries: (settings.maxRetries ?? 3).toString(),
-                        saveFaceImages: (settings.saveFaceImages ?? true).toString(),
                         schoolName: settings.schoolName || 'Attendance AI School',
                     };
                     await api.post('/settings', configToSave);
@@ -193,7 +179,6 @@ export function Settings({ user: currentUser }) {
         { id: 'account', label: 'Tài khoản', icon: User },
         { id: 'users', label: 'Người dùng', icon: Users, adminOnly: true },
         { id: 'attendance', label: 'Luật điểm danh', icon: Lock, adminOnly: true },
-        { id: 'ai', label: 'Cấu hình AI', icon: Cpu, adminOnly: true },
     ];
 
     const visibleTabs = tabs.filter(t => !t.adminOnly || isAdmin);
@@ -432,54 +417,6 @@ export function Settings({ user: currentUser }) {
                                                 </div>
                                             </label>
                                         ))}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Tab 4: AI Config */}
-                    {activeTab === 'ai' && isAdmin && (
-                        <div className="space-y-6 animate-fade-in">
-                            <div className="card">
-                                <h3 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
-                                    <Cpu size={20} className="text-indigo-500" /> Cấu hình Nhận diện AI
-                                </h3>
-                                <div className="space-y-6">
-                                    <div className="p-6 bg-slate-900 rounded-2xl text-white relative overflow-hidden group">
-                                        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                                            <div>
-                                                <h4 className="font-black text-xl mb-1 flex items-center gap-2">
-                                                    Trạng thái AI: <span className="text-emerald-400">Đang chạy</span>
-                                                </h4>
-                                                <p className="text-slate-400 text-sm">Hệ thống đang sử dụng Model FaceAPI-v2-stable</p>
-                                            </div>
-                                            <button 
-                                                onClick={() => handleField('aiEnabled', !settings.aiEnabled)}
-                                                className={`px-6 py-2.5 rounded-xl font-bold transition-all ${settings.aiEnabled ? 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-900/20' : 'bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-900/20'}`}
-                                            >
-                                                {settings.aiEnabled ? 'Tạm dừng AI' : 'Kích hoạt AI'}
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
-                                        <div className="space-y-2">
-                                            <div className="flex justify-between items-center mb-2">
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Độ tin cậy Model (Confidence)</label>
-                                                <span className="text-indigo-600 font-black text-sm">{Math.round(settings.confidenceThreshold * 100)}%</span>
-                                            </div>
-                                            <input 
-                                                type="range" min="0.5" max="0.99" step="0.01" 
-                                                className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                                                value={settings.confidenceThreshold}
-                                                onChange={e => handleField('confidenceThreshold', parseFloat(e.target.value))}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Số lần thử lại tối đa (Retry)</label>
-                                            <input type="number" className="input" value={settings.maxRetries} onChange={e => handleField('maxRetries', parseInt(e.target.value))} />
-                                        </div>
                                     </div>
                                 </div>
                             </div>

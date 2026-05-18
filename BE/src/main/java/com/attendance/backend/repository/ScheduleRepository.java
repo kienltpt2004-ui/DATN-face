@@ -21,4 +21,6 @@ public interface ScheduleRepository extends JpaRepository<Schedule, String> {
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.data.jpa.repository.Query("DELETE FROM Schedule s WHERE s.teacherId = :teacherId")
     void deleteByTeacherId(@org.springframework.data.repository.query.Param("teacherId") String teacherId);
+
+    List<Schedule> findByLocationId(String locationId);
 }

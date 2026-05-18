@@ -37,8 +37,8 @@ export function Locations() {
     };
 
     const filtered = locationsList.filter(l =>
-        l.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        l.address.toLowerCase().includes(searchTerm.toLowerCase())
+        (l.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (l.address || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const handleSave = async (e) => {

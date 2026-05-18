@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 import { exportStudentListPDF } from '../utils/pdfExport';
-import { exportDailyAttendanceExcel, getAutoColumnWidths } from '../utils/excelExport'; 
-import { Plus, Search, Edit2, Trash2, Download, X, Check, FileSpreadsheet, Upload, Mail, Phone } from 'lucide-react';
+import { getAutoColumnWidths } from '../utils/excelExport';
+import { Plus, Search, Edit2, Trash2, Download, X, Check, FileSpreadsheet, Upload, Mail, Phone, Users, ChevronRight, ArrowLeft, BookOpen } from 'lucide-react';
 import { parseExcel } from '../utils/excelImport';
 
-function StudentModal({ student, classes, onClose, onSave, isTeacher }) {
+function StudentModal({ student, classes, onClose, onSave }) {
     const [form, setForm] = useState({
         id: student?.id || '',
         name: student?.name || '',
@@ -33,33 +33,15 @@ function StudentModal({ student, classes, onClose, onSave, isTeacher }) {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Họ và tên</label>
                         <input className="input" value={form.name} onChange={e => handle('name', e.target.value)} placeholder="Nguyễn Văn A" />
                     </div>
-
-                    {/* Học phần: Admin chỉ xem, Giáo viên có thể chọn */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Học phần {isTeacher && <span className="text-red-500">*</span>}
-                        </label>
-                        {isTeacher ? (
-                            <select className="input" value={form.classId} onChange={e => handle('classId', e.target.value)}>
-                                <option value="">-- Chọn học phần --</option>
-                                {classes.map(c => (
-                                    <option key={c} value={c}>{c}</option>
-                                ))}
-                            </select>
-                        ) : (
-                            <div className="input bg-gray-50 text-gray-500 flex flex-wrap gap-1 min-h-[40px]">
-                                {form.classId
-                                    ? form.classId.split(',').map(c => (
-                                        <span key={c} className="bg-indigo-100 text-indigo-700 text-xs font-semibold px-2 py-0.5 rounded-full">
-                                            {c.trim()}
-                                        </span>
-                                    ))
-                                    : <span className="text-gray-400 text-sm">Chưa được gán vào học phần nào</span>
-                                }
-                            </div>
-                        )}
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Học phần</label>
+                        <select className="input" value={form.classId} onChange={e => handle('classId', e.target.value)}>
+                            <option value="">-- Chọn học phần --</option>
+                            {classes.map(c => (
+                                <option key={c.id} value={c.id}>{c.name || c.id}</option>
+                            ))}
+                        </select>
                     </div>
-
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Giới tính</label>
@@ -93,20 +75,17 @@ function StudentModal({ student, classes, onClose, onSave, isTeacher }) {
     );
 }
 
-
 export function Students({ user }) {
     const isTeacher = user?.role?.toLowerCase() === 'teacher';
     const [students, setStudents] = useState([]);
     const [classes, setClasses] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    const [filterClass, setFilterClass] = useState('Tất cả');
-    const [modal, setModal] = useState(null); 
+    const [selectedClass, setSelectedClass] = useState(null);
+    const [modal, setModal] = useState(null);
     const [deleteId, setDeleteId] = useState(null);
 
-    useEffect(() => {
-        fetchData();
-    }, []);
+    useEffect(() => { fetchData(); }, []);
 
     const fetchData = async () => {
         setLoading(true);
@@ -116,7 +95,7 @@ export function Students({ user }) {
                 api.get('/classes')
             ]);
             setStudents(stdRes);
-            setClasses(clsRes.map(c => c.id));
+            setClasses(clsRes);
         } catch (error) {
             console.error('Failed to fetch data:', error);
         } finally {
@@ -124,42 +103,55 @@ export function Students({ user }) {
         }
     };
 
+    // Admin: tất cả học sinh lọc theo search
     const filtered = students.filter(s =>
-        s.name.toLowerCase().includes(search.toLowerCase()) || s.id.includes(search)
+        (s.name || '').toLowerCase().includes(search.toLowerCase()) || (s.id || '').includes(search)
     );
 
-    const validateForm = (form) => {
+    // Teacher: học sinh của lớp đang chọn, lọc theo search
+    const getClassStudents = (cls) =>
+        students.filter(s => s.classId && s.classId.split(',').map(id => id.trim()).includes(cls.id));
+
+    const filteredClassStudents = selectedClass
+        ? getClassStudents(selectedClass).filter(s =>
+            (s.name || '').toLowerCase().includes(search.toLowerCase()) || (s.id || '').includes(search)
+          )
+        : [];
+
+    const handleSelectClass = (cls) => {
+        setSelectedClass(cls);
+        setSearch('');
+    };
+
+    const handleBackToClasses = () => {
+        setSelectedClass(null);
+        setSearch('');
+    };
+
+    const validateForm = (form, isEdit = false) => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         const phoneRegex = /^[0-9]{10,11}$/;
-
-        if (!form.name || !form.id) {
-            alert('Vui lòng nhập tên và mã sinh viên');
+        if (!form.name?.trim()) { alert('Vui lòng nhập họ tên sinh viên'); return false; }
+        if (!form.id?.trim()) { alert('Vui lòng nhập mã sinh viên'); return false; }
+        if (!isEdit && students.some(s => s.id === form.id.trim())) {
+            alert('Mã sinh viên "' + form.id + '" đã tồn tại trong danh sách');
             return false;
         }
-        if (form.email && !emailRegex.test(form.email)) {
-            alert('Định dạng email không hợp lệ');
-            return false;
-        }
-        if (form.phone && !phoneRegex.test(form.phone)) {
-            alert('Số điện thoại phải từ 10-11 số');
-            return false;
-        }
+        if (form.email && !emailRegex.test(form.email)) { alert('Định dạng email không hợp lệ'); return false; }
+        if (form.phone && !phoneRegex.test(form.phone)) { alert('Số điện thoại phải từ 10-11 số'); return false; }
         return true;
     };
 
     const handleSave = async (form) => {
-        if (!validateForm(form)) return;
+        const isEdit = modal !== 'add';
+        if (!validateForm(form, isEdit)) return;
         setLoading(true);
-        const payload = {
-            ...form
-        };
-
         try {
             if (modal === 'add') {
-                const newStudent = await api.post('/students', payload);
+                const newStudent = await api.post('/students', form);
                 setStudents(prev => [...prev, newStudent]);
             } else {
-                const updated = await api.put(`/students/${form.id}`, payload);
+                const updated = await api.put(`/students/${form.id}`, form);
                 setStudents(prev => prev.map(s => s.id === form.id ? updated : s));
             }
             setModal(null);
@@ -183,20 +175,32 @@ export function Students({ user }) {
     const handleImport = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-
         const mapping = {
-            'Mã HS': 'id',
-            'Họ tên': 'name',
-            'Học phần': 'classId',
-            'Giới tính': 'gender',
-            'Ngày sinh': 'dob',
-            'Điện thoại': 'phone',
-            'Email': 'email'
+            'Mã HS': 'id', 'Họ tên': 'name', 'Học phần': 'classId',
+            'Giới tính': 'gender', 'Ngày sinh': 'dob', 'Điện thoại': 'phone', 'Email': 'email'
         };
-
         setLoading(true);
         try {
             const data = await parseExcel(file, mapping);
+            const errors = [];
+            const seenIds = new Set();
+            const existingIds = new Set(students.map(s => s.id));
+            data.forEach((row, i) => {
+                const line = i + 1;
+                if (!row.id?.toString().trim()) {
+                    errors.push(`Dòng ${line}: Mã HS không được để trống`);
+                } else {
+                    const id = row.id.toString().trim();
+                    if (seenIds.has(id)) errors.push(`Dòng ${line}: Mã HS "${id}" bị trùng trong file`);
+                    else if (existingIds.has(id)) errors.push(`Dòng ${line}: Mã HS "${id}" đã tồn tại trong hệ thống`);
+                    seenIds.add(id);
+                }
+                if (!row.name?.toString().trim()) errors.push(`Dòng ${line}: Họ tên không được để trống`);
+            });
+            if (errors.length > 0) {
+                alert('Lỗi dữ liệu:\n' + errors.slice(0, 10).join('\n') + (errors.length > 10 ? `\n...và ${errors.length - 10} lỗi khác` : ''));
+                return;
+            }
             await api.post('/students/bulk', data);
             alert('Import thành công ' + data.length + ' học sinh');
             fetchData();
@@ -208,46 +212,110 @@ export function Students({ user }) {
         }
     };
 
+    const exportExcel = (list, fileName) => {
+        const exportData = list.map((s, i) => ({
+            'STT': i + 1, 'Mã HS': s.id, 'Họ tên': s.name,
+            'Giới tính': s.gender, 'Ngày sinh': s.dob,
+            'Điện thoại': s.phone, 'Email': s.email
+        }));
+        import('xlsx').then(XLSX => {
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            ws['!cols'] = getAutoColumnWidths(exportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Danh sách học sinh');
+            XLSX.writeFile(wb, fileName);
+        });
+    };
+
+    const renderStudentTable = (list, showActions) => (
+        <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+                <thead className="table-head">
+                    <tr>
+                        <th className="text-left p-4">Học sinh</th>
+                        <th className="text-left p-4">Mã HS</th>
+                        <th className="text-left p-4">Giới tính</th>
+                        <th className="text-left p-4">Ngày sinh</th>
+                        <th className="text-left p-4">Liên hệ</th>
+                        {showActions && <th className="px-6 py-4 text-right">Hành động</th>}
+                    </tr>
+                </thead>
+                <tbody>
+                    {list.map(s => (
+                        <tr key={s.id} className="table-row">
+                            <td className="p-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white text-xs font-bold">
+                                        {s.name ? s.name.split(' ').pop()[0] : '?'}
+                                    </div>
+                                    <span className="font-medium text-gray-800">{s.name}</span>
+                                </div>
+                            </td>
+                            <td className="p-4 text-gray-500 font-mono text-xs">{s.id}</td>
+                            <td className="p-4">
+                                <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${s.gender === 'Nữ' ? 'bg-pink-100 text-pink-600' : 'bg-blue-100 text-blue-600'}`}>
+                                    {s.gender || 'Nam'}
+                                </span>
+                            </td>
+                            <td className="p-4 text-gray-500">{s.dob}</td>
+                            <td className="p-4 space-y-1">
+                                <div className="flex items-center gap-2 text-xs text-gray-600">
+                                    <Mail size={12} className="text-gray-400" />{s.email || '—'}
+                                </div>
+                                <div className="flex items-center gap-2 text-xs text-gray-600">
+                                    <Phone size={12} className="text-gray-400" />{s.phone || '—'}
+                                </div>
+                            </td>
+                            {showActions && (
+                                <td className="p-4">
+                                    <div className="flex items-center justify-center gap-2">
+                                        <button onClick={() => setModal(s)} className="w-8 h-8 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 flex items-center justify-center transition-all">
+                                            <Edit2 size={13} />
+                                        </button>
+                                        <button onClick={() => setDeleteId(s.id)} className="w-8 h-8 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 flex items-center justify-center transition-all">
+                                            <Trash2 size={13} />
+                                        </button>
+                                    </div>
+                                </td>
+                            )}
+                        </tr>
+                    ))}
+                    {list.length === 0 && (
+                        <tr>
+                            <td colSpan={showActions ? 6 : 5} className="text-center py-8 text-gray-400">
+                                Không có học sinh
+                            </td>
+                        </tr>
+                    )}
+                </tbody>
+            </table>
+        </div>
+    );
+
     return (
         <div className="space-y-5 animate-fade-in">
-            {/* Toolbar */}
-            <div className="card flex flex-wrap items-center gap-3">
-                <div className="relative flex-1 min-w-48">
-                    <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                        className="input pl-8"
-                        placeholder="Tìm theo tên hoặc mã..."
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                    />
-                </div>
-                <button className="btn-secondary" onClick={() => exportStudentListPDF(filtered)}>
-                    <Download size={15} /> PDF
-                </button>
-                <button className="btn-secondary border-emerald-200 text-emerald-600 hover:bg-emerald-50" 
-                    onClick={() => {
-                        const data = filtered.map((s, i) => ({
-                            'STT': i + 1,
-                            'Mã HS': s.id,
-                            'Họ tên': s.name,
-                            'Học phần': s.classId,
-                            'Giới tính': s.gender,
-                            'Ngày sinh': s.dob,
-                            'Điện thoại': s.phone,
-                            'Email': s.email
-                        }));
-                        import('xlsx').then(XLSX => {
-                            const ws = XLSX.utils.json_to_sheet(data);
-                            ws['!cols'] = getAutoColumnWidths(data);
-                            const wb = XLSX.utils.book_new();
-                            XLSX.utils.book_append_sheet(wb, ws, "Danh sách học sinh");
-                            XLSX.writeFile(wb, `danh_sach_hoc_sinh_${filterClass}.xlsx`);
-                        });
-                    }}>
-                    <FileSpreadsheet size={15} /> Excel
-                </button>
-                {!isTeacher && (
-                    <>
+
+            {/* ── VIEW ADMIN ── */}
+            {!isTeacher && (
+                <>
+                    {/* Toolbar admin */}
+                    <div className="card flex flex-wrap items-center gap-3">
+                        <div className="relative flex-1 min-w-48">
+                            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                                className="input pl-8"
+                                placeholder="Tìm theo tên hoặc mã..."
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                            />
+                        </div>
+                        <button className="btn-secondary" onClick={() => exportStudentListPDF(filtered)}>
+                            <Download size={15} /> PDF
+                        </button>
+                        <button className="btn-secondary border-emerald-200 text-emerald-600 hover:bg-emerald-50"
+                            onClick={() => exportExcel(filtered, 'danh_sach_hoc_sinh_tat_ca.xlsx')}>
+                            <FileSpreadsheet size={15} /> Excel
+                        </button>
                         <label className="btn-secondary border-indigo-200 text-indigo-600 hover:bg-indigo-50 cursor-pointer">
                             <Upload size={15} /> Import
                             <input type="file" className="hidden" accept=".xlsx, .xls" onChange={handleImport} />
@@ -255,111 +323,141 @@ export function Students({ user }) {
                         <button className="btn-primary" onClick={() => setModal('add')}>
                             <Plus size={15} /> Thêm học sinh
                         </button>
-                    </>
-                )}
-            </div>
-
-            {/* Summary */}
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-                <span className="bg-indigo-50 text-indigo-700 font-semibold px-2 py-0.5 rounded-md">{filtered.length}</span>
-                học sinh trong hệ thống
-            </div>
-
-            {/* Table */}
-            <div className="card p-0 overflow-hidden relative min-h-[200px]">
-                {loading && (
-                    <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] flex items-center justify-center z-10">
-                        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
                     </div>
-                )}
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                        <thead className="table-head">
-                            <tr>
-                                <th className="text-left p-4">Học sinh</th>
-                                <th className="text-left p-4">Mã HS</th>
-                                <th className="text-left p-4">Học phần</th>
-                                <th className="text-left p-4">Giới tính</th>
-                                <th className="text-left p-4">Ngày sinh</th>
-                                <th className="text-left p-4">Liên hệ</th>
-                                <th className="px-6 py-4 text-right">Hành động</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filtered.map(s => (
-                                <tr key={s.id} className="table-row">
-                                    <td className="p-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white text-xs font-bold">
-                                                {s.name.split(' ').pop()[0]}
-                                            </div>
-                                            <span className="font-medium text-gray-800">{s.name}</span>
-                                        </div>
-                                    </td>
-                                    <td className="p-4 text-gray-500 font-mono text-xs">{s.id}</td>
-                                    <td className="p-4">
-                                        <span className="bg-indigo-50 text-indigo-700 text-xs font-semibold px-2 py-0.5 rounded">{s.classId || '—'}</span>
-                                    </td>
-                                    <td className="p-4">
-                                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${s.gender === 'Nữ' ? 'bg-pink-100 text-pink-600' : 'bg-blue-100 text-blue-600'}`}>
-                                            {s.gender || 'Nam'}
-                                        </span>
-                                    </td>
-                                    <td className="p-4 text-gray-500">{s.dob}</td>
-                                    <td className="p-4 space-y-1">
-                                        <div className="flex items-center gap-2 text-xs text-gray-600">
-                                            <Mail size={12} className="text-gray-400" />
-                                            {s.email || '—'}
-                                        </div>
-                                        <div className="flex items-center gap-2 text-xs text-gray-600">
-                                            <Phone size={12} className="text-gray-400" />
-                                            {s.phone}
-                                        </div>
-                                    </td>
-                                    <td className="p-4">
-                                        <div className="flex items-center justify-center gap-2">
-                                            {!isTeacher && (
-                                                <>
-                                                    <button
-                                                        onClick={() => setModal(s)}
-                                                        className="w-8 h-8 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 flex items-center justify-center transition-all"
-                                                    >
-                                                        <Edit2 size={13} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setDeleteId(s.id)}
-                                                        className="w-8 h-8 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 flex items-center justify-center transition-all"
-                                                    >
-                                                        <Trash2 size={13} />
-                                                    </button>
-                                                </>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                            {!loading && filtered.length === 0 && (
-                                <tr>
-                                    <td colSpan={7} className="text-center py-12 text-gray-400">Không tìm thấy học sinh</td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
 
-            {/* Modal thêm/sửa */}
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <span className="bg-indigo-50 text-indigo-700 font-semibold px-2 py-0.5 rounded-md">{filtered.length}</span>
+                        học sinh
+                    </div>
+                    <div className="card p-0 overflow-hidden relative min-h-[200px]">
+                        {loading && (
+                            <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] flex items-center justify-center z-10">
+                                <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                            </div>
+                        )}
+                        {renderStudentTable(filtered, true)}
+                    </div>
+                </>
+            )}
+
+            {/* ── VIEW TEACHER ── */}
+            {isTeacher && (
+                <>
+                    {/* Màn hình 1: Danh sách lớp */}
+                    {!selectedClass && (
+                        <div className="relative">
+                            {loading && (
+                                <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] flex items-center justify-center z-10 rounded-2xl">
+                                    <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                                </div>
+                            )}
+                            {classes.length === 0 && !loading && (
+                                <div className="card text-center py-16 text-gray-400">
+                                    <Users size={40} className="mx-auto mb-3 opacity-20" />
+                                    <p className="font-medium">Bạn chưa được phân công dạy lớp nào</p>
+                                </div>
+                            )}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {classes.map(cls => {
+                                    const count = getClassStudents(cls).length;
+                                    return (
+                                        <button
+                                            key={cls.id}
+                                            onClick={() => handleSelectClass(cls)}
+                                            className="card text-left hover:shadow-lg hover:border-indigo-200 border border-transparent transition-all cursor-pointer group"
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-base shrink-0 group-hover:bg-indigo-200 transition-colors">
+                                                    {(cls.name || cls.id).substring(0, 2).toUpperCase()}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <h3 className="font-bold text-gray-800 truncate">{cls.name || cls.id}</h3>
+                                                    <p className="text-xs text-gray-400 mt-0.5">Mã: {cls.id}</p>
+                                                    <div className="flex items-center gap-1 mt-1.5">
+                                                        <Users size={11} className="text-indigo-400" />
+                                                        <span className="text-xs font-semibold text-indigo-600">{count} học sinh</span>
+                                                    </div>
+                                                </div>
+                                                <ChevronRight size={18} className="text-gray-300 group-hover:text-indigo-400 transition-colors shrink-0" />
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Màn hình 2: Danh sách học sinh của lớp */}
+                    {selectedClass && (
+                        <div className="space-y-4">
+                            {/* Header lớp + nút quay lại */}
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={handleBackToClasses}
+                                    className="w-9 h-9 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
+                                >
+                                    <ArrowLeft size={16} className="text-gray-600" />
+                                </button>
+                                <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-sm">
+                                    {(selectedClass.name || selectedClass.id).substring(0, 2).toUpperCase()}
+                                </div>
+                                <div>
+                                    <h2 className="font-bold text-gray-800 text-lg leading-tight">{selectedClass.name || selectedClass.id}</h2>
+                                    <p className="text-xs text-gray-400">Mã: {selectedClass.id}</p>
+                                </div>
+                            </div>
+
+                            {/* Toolbar: tìm kiếm + xuất file */}
+                            <div className="card flex flex-wrap items-center gap-3">
+                                <div className="relative flex-1 min-w-48">
+                                    <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <input
+                                        className="input pl-8"
+                                        placeholder="Tìm theo tên hoặc mã..."
+                                        value={search}
+                                        onChange={e => setSearch(e.target.value)}
+                                    />
+                                </div>
+                                <button className="btn-secondary" onClick={() => exportStudentListPDF(filteredClassStudents, { showClassCol: false, className: selectedClass.name || selectedClass.id })}>
+                                    <Download size={15} /> PDF
+                                </button>
+                                <button className="btn-secondary border-emerald-200 text-emerald-600 hover:bg-emerald-50"
+                                    onClick={() => exportExcel(filteredClassStudents, `danh_sach_${(selectedClass.name || selectedClass.id).replace(/\s+/g, '_')}.xlsx`)}>
+                                    <FileSpreadsheet size={15} /> Excel
+                                </button>
+                            </div>
+
+                            {/* Đếm số học sinh */}
+                            <div className="flex items-center gap-2 text-sm text-gray-500">
+                                <span className="bg-indigo-50 text-indigo-700 font-semibold px-2 py-0.5 rounded-md">{filteredClassStudents.length}</span>
+                                học sinh
+                            </div>
+
+                            {/* Bảng học sinh */}
+                            <div className="card p-0 overflow-hidden relative min-h-[200px]">
+                                {loading && (
+                                    <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] flex items-center justify-center z-10">
+                                        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                                    </div>
+                                )}
+                                {renderStudentTable(filteredClassStudents, false)}
+                            </div>
+                        </div>
+                    )}
+                </>
+            )}
+
+            {/* Modal thêm/sửa (chỉ admin) */}
             {modal && (
                 <StudentModal
                     student={modal === 'add' ? null : modal}
                     classes={classes}
-                    isTeacher={isTeacher}
                     onClose={() => setModal(null)}
                     onSave={handleSave}
                 />
             )}
 
-            {/* Confirm xóa */}
+            {/* Confirm xóa (chỉ admin) */}
             {deleteId && (
                 <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
                     <div className="bg-white rounded-2xl shadow-2xl p-6 w-80 animate-scale-in">

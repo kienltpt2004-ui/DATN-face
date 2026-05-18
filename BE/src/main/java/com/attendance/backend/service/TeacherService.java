@@ -4,8 +4,7 @@ import com.attendance.backend.dto.TeacherDTO;
 import com.attendance.backend.entity.Teacher;
 import com.attendance.backend.entity.User;
 import com.attendance.backend.exception.ResourceNotFoundException;
-import com.attendance.backend.repository.ClassRoomRepository;
-import com.attendance.backend.entity.ClassRoom;
+import com.attendance.backend.repository.AttendanceRecordRepository;
 import com.attendance.backend.repository.ScheduleRepository;
 import com.attendance.backend.repository.TeacherRepository;
 import com.attendance.backend.repository.UserRepository;
@@ -13,6 +12,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -21,17 +21,18 @@ public class TeacherService {
     private final TeacherRepository teacherRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final ClassRoomRepository classRoomRepository;
     private final ScheduleRepository scheduleRepository;
+    private final AttendanceRecordRepository attendanceRecordRepository;
 
-    public TeacherService(TeacherRepository teacherRepository, UserRepository userRepository, 
-                          PasswordEncoder passwordEncoder, ClassRoomRepository classRoomRepository,
-                          ScheduleRepository scheduleRepository) {
+    public TeacherService(TeacherRepository teacherRepository, UserRepository userRepository,
+                          PasswordEncoder passwordEncoder,
+                          ScheduleRepository scheduleRepository,
+                          AttendanceRecordRepository attendanceRecordRepository) {
         this.teacherRepository = teacherRepository;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
-        this.classRoomRepository = classRoomRepository;
         this.scheduleRepository = scheduleRepository;
+        this.attendanceRecordRepository = attendanceRecordRepository;
     }
 
     public List<TeacherDTO> getAllTeachers() {
@@ -49,14 +50,13 @@ public class TeacherService {
         if (teacherRepository.existsById(dto.getId())) {
             throw new RuntimeException("Mã giáo viên đã tồn tại: " + dto.getId());
         }
-        if (dto.getEmail() != null && !dto.getEmail().isEmpty() && teacherRepository.existsByEmail(dto.getEmail())) {
+        if (dto.getEmail() != null && !dto.getEmail().isBlank() && teacherRepository.existsByEmail(dto.getEmail())) {
             throw new RuntimeException("Email đã được sử dụng bởi giáo viên khác: " + dto.getEmail());
         }
-        if (dto.getPhone() != null && !dto.getPhone().isEmpty() && teacherRepository.existsByPhone(dto.getPhone())) {
+        if (dto.getPhone() != null && !dto.getPhone().isBlank() && teacherRepository.existsByPhone(dto.getPhone())) {
             throw new RuntimeException("Số điện thoại đã được sử dụng bởi giáo viên khác: " + dto.getPhone());
         }
 
-        // Tạo tài khoản user cho giáo viên
         User user = User.builder()
                 .username(dto.getId())
                 .passwordHash(passwordEncoder.encode(dto.getId())) // default password = teacherId
@@ -83,18 +83,69 @@ public class TeacherService {
 
     @Transactional
     public List<TeacherDTO> createTeachersBulk(List<TeacherDTO> dtos) {
-        return dtos.stream().map(this::createTeacher).toList();
+        // Validate toàn bộ trước khi tạo bất kỳ record nào
+        List<String> errors = new ArrayList<>();
+        for (int i = 0; i < dtos.size(); i++) {
+            TeacherDTO dto = dtos.get(i);
+            int row = i + 1;
+            if (dto.getId() == null || dto.getId().isBlank()) {
+                errors.add("Dòng " + row + ": Mã giáo viên không được để trống");
+                continue;
+            }
+            if (teacherRepository.existsById(dto.getId()))
+                errors.add("Dòng " + row + ": Mã GV '" + dto.getId() + "' đã tồn tại");
+            if (dto.getEmail() != null && !dto.getEmail().isBlank()
+                    && teacherRepository.existsByEmail(dto.getEmail()))
+                errors.add("Dòng " + row + ": Email '" + dto.getEmail() + "' đã được sử dụng");
+            if (dto.getPhone() != null && !dto.getPhone().isBlank()
+                    && teacherRepository.existsByPhone(dto.getPhone()))
+                errors.add("Dòng " + row + ": SĐT '" + dto.getPhone() + "' đã được sử dụng");
+        }
+        if (!errors.isEmpty()) {
+            throw new RuntimeException("Lỗi import:\n" + String.join("\n", errors));
+        }
+        // Tất cả hợp lệ → tạo trong cùng transaction, lỗi DB sẽ rollback toàn bộ
+        return dtos.stream().map(this::createTeacherInternal).toList();
+    }
+
+    /** Tạo teacher không validate lại (đã validate ở bulk) */
+    private TeacherDTO createTeacherInternal(TeacherDTO dto) {
+        User user = User.builder()
+                .username(dto.getId())
+                .passwordHash(passwordEncoder.encode(dto.getId()))
+                .role(User.Role.TEACHER)
+                .name(dto.getName())
+                .email(dto.getEmail())
+                .phone(dto.getPhone())
+                .isActive(true)
+                .build();
+        user = userRepository.save(user);
+
+        Teacher teacher = Teacher.builder()
+                .id(dto.getId())
+                .name(dto.getName())
+                .email(dto.getEmail())
+                .phone(dto.getPhone())
+                .gender(dto.getGender())
+                .isActive(dto.getIsActive() != null ? dto.getIsActive() : true)
+                .userId(user.getId())
+                .build();
+
+        return toDTO(teacherRepository.save(teacher));
     }
 
     @Transactional
     public TeacherDTO updateTeacher(String id, TeacherDTO dto) {
         Teacher teacher = findOrThrow(id);
 
-        // Validate trùng email/sđt của người khác
-        if (dto.getEmail() != null && !dto.getEmail().isEmpty() && !dto.getEmail().equals(teacher.getEmail()) && teacherRepository.existsByEmail(dto.getEmail())) {
+        if (dto.getEmail() != null && !dto.getEmail().isBlank()
+                && !dto.getEmail().equals(teacher.getEmail())
+                && teacherRepository.existsByEmail(dto.getEmail())) {
             throw new RuntimeException("Email đã được sử dụng bởi giáo viên khác: " + dto.getEmail());
         }
-        if (dto.getPhone() != null && !dto.getPhone().isEmpty() && !dto.getPhone().equals(teacher.getPhone()) && teacherRepository.existsByPhone(dto.getPhone())) {
+        if (dto.getPhone() != null && !dto.getPhone().isBlank()
+                && !dto.getPhone().equals(teacher.getPhone())
+                && teacherRepository.existsByPhone(dto.getPhone())) {
             throw new RuntimeException("Số điện thoại đã được sử dụng bởi giáo viên khác: " + dto.getPhone());
         }
 
@@ -122,14 +173,23 @@ public class TeacherService {
     @Transactional
     public void deleteTeacher(String id) {
         Teacher teacher = findOrThrow(id);
-        
-        // 1. Xóa tất cả lịch dạy của giáo viên này
+
+        // 1. Lấy danh sách scheduleId của GV này trước khi xóa schedule
+        List<String> scheduleIds = scheduleRepository.findByTeacherIdIgnoreCase(id)
+                .stream().map(s -> s.getId()).toList();
+
+        // 2. Xóa attendance records liên quan đến các schedule đó
+        if (!scheduleIds.isEmpty()) {
+            attendanceRecordRepository.deleteByScheduleIdIn(scheduleIds);
+        }
+
+        // 3. Xóa schedules
         scheduleRepository.deleteByTeacherId(id);
-        
-        // 2. Xóa giáo viên
+
+        // 4. Xóa teacher
         teacherRepository.deleteById(id);
-        
-        // 3. Xóa tài khoản user liên kết
+
+        // 5. Xóa tài khoản user liên kết
         if (teacher.getUserId() != null) {
             userRepository.deleteById(teacher.getUserId());
         }
@@ -147,8 +207,6 @@ public class TeacherService {
         }
         return toDTO(teacherRepository.save(teacher));
     }
-
-
 
     private Teacher findOrThrow(String id) {
         return teacherRepository.findById(id)

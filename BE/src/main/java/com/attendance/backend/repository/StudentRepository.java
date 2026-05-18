@@ -36,4 +36,10 @@ public interface StudentRepository extends JpaRepository<Student, String> {
 
     boolean existsByEmail(String email);
     boolean existsByPhone(String phone);
+
+    @Query("SELECT DISTINCT s FROM Student s LEFT JOIN FETCH s.classes")
+    List<Student> findAllWithClasses();
+
+    @Query("SELECT s FROM Student s WHERE s.faceEmbedding IS NOT NULL AND s.faceEmbedding != ''")
+    List<Student> findAllWithFaceEmbedding();
 }

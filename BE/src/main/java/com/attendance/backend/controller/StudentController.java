@@ -8,10 +8,17 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import com.attendance.backend.dto.ApiResponse;
 import com.attendance.backend.dto.FaceRequest;
 import com.attendance.backend.dto.StudentAttendanceResponse;
+import com.attendance.backend.entity.Schedule;
 import com.attendance.backend.service.AttendanceService;
 
 @RestController
@@ -23,7 +30,7 @@ public class StudentController {
     private final com.attendance.backend.repository.ScheduleRepository scheduleRepository;
     private final AttendanceService attendanceService;
 
-    public StudentController(StudentService studentService, 
+    public StudentController(StudentService studentService,
                              com.attendance.backend.repository.TeacherRepository teacherRepository,
                              com.attendance.backend.repository.ScheduleRepository scheduleRepository,
                              AttendanceService attendanceService) {
@@ -39,40 +46,36 @@ public class StudentController {
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ADMIN"));
         boolean isTeacher = authentication.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_TEACHER") || a.getAuthority().equals("TEACHER"));
-        
+
         if (!isAdmin && isTeacher) {
             String username = authentication.getName();
             List<String> classIds = scheduleRepository.findByTeacherIdIgnoreCase(username).stream()
-                    .map(com.attendance.backend.entity.Schedule::getClassId).distinct().toList();
-            
+                    .map(Schedule::getClassId).distinct().toList();
+
             // Fallback: thử profile ID nếu không tìm thấy lịch theo username
             if (classIds.isEmpty()) {
                 String profileId = teacherRepository.findByUsernameOrId(username)
                         .map(com.attendance.backend.entity.Teacher::getId).orElse(username);
                 if (!profileId.equals(username)) {
                     classIds = scheduleRepository.findByTeacherIdIgnoreCase(profileId).stream()
-                            .map(com.attendance.backend.entity.Schedule::getClassId).distinct().toList();
+                            .map(Schedule::getClassId).distinct().toList();
                 }
             }
 
-            if (classIds.isEmpty()) return ResponseEntity.ok(java.util.Collections.emptyList());
+            if (classIds.isEmpty()) return ResponseEntity.ok(Collections.emptyList());
 
             // Bước 1: tìm qua bảng student_classes (enrollment chính thức)
             List<StudentDTO> teacherStudents = studentService.getStudentsByClasses(classIds);
-            
+
             // Bước 2: Fallback tìm qua bản ghi điểm danh (cho dữ liệu cũ chưa enroll)
             if (teacherStudents.isEmpty()) {
                 teacherStudents = studentService.getStudentsByAttendanceClasses(classIds);
             }
-            
-            // Bước 3: Nếu vẫn rỗng → trả về tất cả sinh viên (chưa có dữ liệu điểm danh)
-            if (teacherStudents.isEmpty()) {
-                teacherStudents = studentService.getAllStudents();
-            }
-            
+
+            // Không fallback về toàn bộ SV — trả về danh sách rỗng nếu không tìm thấy
             return ResponseEntity.ok(teacherStudents);
         }
-        
+
         return ResponseEntity.ok(studentService.getAllStudents());
     }
 
@@ -82,12 +85,9 @@ public class StudentController {
         List<StudentDTO> students = studentService.getStudentsByClass(classId);
         // Bước 2: fallback qua bản ghi điểm danh
         if (students.isEmpty()) {
-            students = studentService.getStudentsByAttendanceClasses(java.util.List.of(classId));
+            students = studentService.getStudentsByAttendanceClasses(List.of(classId));
         }
-        // Bước 3: nếu vẫn rỗng, trả về tất cả sinh viên
-        if (students.isEmpty()) {
-            students = studentService.getAllStudents();
-        }
+        // Lớp thực sự rỗng → trả về danh sách rỗng, không trả về tất cả SV
         return ResponseEntity.ok(students);
     }
 
@@ -130,80 +130,77 @@ public class StudentController {
     @PostMapping("/me/face")
     public ResponseEntity<ApiResponse<?>> registerFace(
             @RequestBody FaceRequest request,
-            org.springframework.security.core.Authentication authentication
-    ) {
+            org.springframework.security.core.Authentication authentication) {
         String studentId = authentication.getName();
         studentService.registerFace(studentId, request.getBase64());
-        return ResponseEntity.ok(
-                new ApiResponse<>("Đăng ký khuôn mặt thành công", "SUCCESS", "", null)
-        );
+        return ResponseEntity.ok(new ApiResponse<>("Đăng ký khuôn mặt thành công", "SUCCESS", "", null));
     }
 
     @PutMapping("/me/face-update")
     public ResponseEntity<ApiResponse<?>> updateFace(
             @RequestBody FaceRequest request,
-            org.springframework.security.core.Authentication authentication
-    ) {
+            org.springframework.security.core.Authentication authentication) {
         String studentId = authentication.getName();
         studentService.updateFace(studentId, request.getBase64());
-        return ResponseEntity.ok(
-                new ApiResponse<>("Cập nhật khuôn mặt thành công", "SUCCESS", "", null)
-        );
+        return ResponseEntity.ok(new ApiResponse<>("Cập nhật khuôn mặt thành công", "SUCCESS", "", null));
     }
 
     @GetMapping("/me/attendance")
     public ResponseEntity<ApiResponse<List<StudentAttendanceResponse>>> getMyAttendance(
-            org.springframework.security.core.Authentication authentication
-    ) {
+            org.springframework.security.core.Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {
             throw new RuntimeException("Chưa đăng nhập");
         }
 
         String studentId = authentication.getName();
-        
-        // Lấy tất cả điểm danh
         List<com.attendance.backend.dto.AttendanceRecordDTO> records = attendanceService.getByStudentAndDateRange(
-                studentId, LocalDate.of(2000, 1, 1), LocalDate.of(2100, 1, 1)
-        );
-        
+                studentId, LocalDate.of(2000, 1, 1), LocalDate.of(2100, 1, 1));
+
+        // Batch load schedules để tránh N+1 query
+        Set<String> scheduleIds = records.stream()
+                .map(com.attendance.backend.dto.AttendanceRecordDTO::getScheduleId)
+                .filter(sid -> sid != null && !sid.isBlank())
+                .collect(Collectors.toSet());
+        Map<String, Schedule> scheduleMap = scheduleRepository.findAllById(scheduleIds).stream()
+                .collect(Collectors.toMap(Schedule::getId, s -> s));
+
         List<StudentAttendanceResponse> responseList = records.stream().map(r -> {
             StudentAttendanceResponse res = new StudentAttendanceResponse();
             res.setClassName(r.getClassId());
-            
-            scheduleRepository.findById(r.getScheduleId()).ifPresent(s -> res.setSubjectName(s.getSubject()));
-            
-            res.setAttendanceTime(r.getDate().toString() + " " + (r.getCheckInTime() != null ? r.getCheckInTime() : ""));
+            Schedule sched = scheduleMap.get(r.getScheduleId());
+            if (sched != null) res.setSubjectName(sched.getSubject());
+            res.setAttendanceTime(r.getDate().toString()
+                    + (r.getCheckInTime() != null ? " " + r.getCheckInTime() : ""));
             return res;
         }).toList();
 
         return ResponseEntity.ok(
-                new ApiResponse<>("Lấy lịch sử điểm danh thành công", "SUCCESS", "", responseList, new ApiResponse.MetaData(0, 1))
-        );
+                new ApiResponse<>("Lấy lịch sử điểm danh thành công", "SUCCESS", "", responseList,
+                        new ApiResponse.MetaData(0, 1)));
     }
+
     @GetMapping("/me/schedules/available")
     public ResponseEntity<ApiResponse<List<com.attendance.backend.dto.AvailableScheduleDTO>>> getAvailableSchedules(
-            org.springframework.security.core.Authentication authentication
-    ) {
+            org.springframework.security.core.Authentication authentication) {
         String studentId = authentication.getName();
-        List<com.attendance.backend.dto.AvailableScheduleDTO> schedules = attendanceService.getAvailableSchedulesForStudent(studentId);
+        List<com.attendance.backend.dto.AvailableScheduleDTO> schedules =
+                attendanceService.getAvailableSchedulesForStudent(studentId);
         return ResponseEntity.ok(
-                new ApiResponse<>("Lấy danh sách lịch học mở điểm danh thành công", "SUCCESS", "", schedules)
-        );
+                new ApiResponse<>("Lấy danh sách lịch học mở điểm danh thành công", "SUCCESS", "", schedules));
     }
 
     @GetMapping("/me/schedules")
     public ResponseEntity<ApiResponse<List<com.attendance.backend.dto.ScheduleDTO>>> getMyWeeklySchedules(
-            org.springframework.security.core.Authentication authentication
-    ) {
+            org.springframework.security.core.Authentication authentication) {
         String studentId = authentication.getName();
         com.attendance.backend.dto.StudentDTO student = studentService.getStudentById(studentId);
-        
+
         List<com.attendance.backend.dto.ScheduleDTO> schedules = new java.util.ArrayList<>();
         if (student.getClassId() != null && !student.getClassId().trim().isEmpty()) {
-            java.util.List<String> classIds = java.util.Arrays.stream(student.getClassId().split(","))
+            List<String> classIds = Arrays.stream(student.getClassId().split(","))
                     .map(String::trim).filter(s -> !s.isEmpty()).toList();
             for (String classId : classIds) {
-                schedules.addAll(scheduleRepository.findByClassId(classId).stream()
+                scheduleRepository.findByClassId(classId).stream()
                         .map(s -> com.attendance.backend.dto.ScheduleDTO.builder()
                                 .id(s.getId())
                                 .classId(s.getClassId())
@@ -215,11 +212,10 @@ public class StudentController {
                                 .room(s.getRoom())
                                 .locationId(s.getLocationId())
                                 .build())
-                        .toList());
+                        .forEach(schedules::add);
             }
         }
         return ResponseEntity.ok(
-                new ApiResponse<>("Lấy danh sách lịch học trong tuần thành công", "SUCCESS", "", schedules)
-        );
+                new ApiResponse<>("Lấy danh sách lịch học trong tuần thành công", "SUCCESS", "", schedules));
     }
 }

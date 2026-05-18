@@ -1,12 +1,13 @@
 package com.attendance.backend.service;
 
 import com.attendance.backend.dto.ScheduleDTO;
+import com.attendance.backend.entity.ClassRoom;
 import com.attendance.backend.entity.Schedule;
 import com.attendance.backend.exception.ResourceNotFoundException;
-import com.attendance.backend.repository.ScheduleRepository;
 import com.attendance.backend.repository.ClassRoomRepository;
-import com.attendance.backend.entity.ClassRoom;
+import com.attendance.backend.repository.ScheduleRepository;
 import com.attendance.backend.repository.TeacherRepository;
+import com.attendance.backend.utils.TimeUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,14 +17,14 @@ import java.util.List;
 public class ScheduleService {
 
     private final ScheduleRepository scheduleRepository;
-    private final TeacherRepository teacherRepository;
+//    private final TeacherRepository teacherRepository;
     private final ClassRoomRepository classRoomRepository;
 
     public ScheduleService(ScheduleRepository scheduleRepository, 
                           TeacherRepository teacherRepository,
                           ClassRoomRepository classRoomRepository) {
         this.scheduleRepository = scheduleRepository;
-        this.teacherRepository = teacherRepository;
+//        this.teacherRepository = teacherRepository;
         this.classRoomRepository = classRoomRepository;
     }
 
@@ -81,7 +82,8 @@ public class ScheduleService {
     }
 
     private int getDayValue(String day) {
-        if (day == null) return 1;
+        if (day == null || day.isBlank())
+            throw new RuntimeException("Ngày học không được để trống");
         String d = day.toUpperCase().trim();
         if (d.contains("2") || d.contains("MON")) return 1;
         if (d.contains("3") || d.contains("TUE")) return 2;
@@ -90,11 +92,8 @@ public class ScheduleService {
         if (d.contains("6") || d.contains("FRI")) return 5;
         if (d.contains("7") || d.contains("SAT")) return 6;
         if (d.contains("CN") || d.contains("SUN") || d.contains("NHẬT")) return 7;
-        return 1;
+        throw new RuntimeException("Ngày học không hợp lệ: '" + day + "'. Dùng: Thứ 2 - Thứ 7, Chủ Nhật");
     }
-
-    private static final java.time.format.DateTimeFormatter TIME_FORMATTER = 
-        java.time.format.DateTimeFormatter.ofPattern("[HH:mm][H:mm][HH:mm:ss]");
 
     private void validateSchedule(String excludeId, ScheduleDTO dto) {
         int dayVal = getDayValue(dto.getDayOfWeek());
@@ -110,8 +109,11 @@ public class ScheduleService {
         };
         dto.setDayOfWeek(dayStr); 
 
-        java.time.LocalTime start = java.time.LocalTime.parse(dto.getStartTime(), TIME_FORMATTER);
-        java.time.LocalTime end = java.time.LocalTime.parse(dto.getEndTime(), TIME_FORMATTER);
+        if (dto.getStartTime() == null || dto.getEndTime() == null)
+            throw new RuntimeException("Giờ bắt đầu và giờ kết thúc không được để trống");
+
+        java.time.LocalTime start = java.time.LocalTime.parse(dto.getStartTime(), TimeUtils.TIME_FORMATTER);
+        java.time.LocalTime end = java.time.LocalTime.parse(dto.getEndTime(), TimeUtils.TIME_FORMATTER);
 
         if (start.isAfter(end) || start.equals(end)) {
             throw new RuntimeException("Thời gian bắt đầu phải trước thời gian kết thúc");
@@ -126,8 +128,8 @@ public class ScheduleService {
 
             java.time.LocalTime sStart, sEnd;
             try {
-                sStart = java.time.LocalTime.parse(s.getStartTime(), TIME_FORMATTER);
-                sEnd   = java.time.LocalTime.parse(s.getEndTime(),   TIME_FORMATTER);
+                sStart = java.time.LocalTime.parse(s.getStartTime(), TimeUtils.TIME_FORMATTER);
+                sEnd   = java.time.LocalTime.parse(s.getEndTime(),   TimeUtils.TIME_FORMATTER);
             } catch (Exception ignored) {
                 continue;
             }
@@ -176,18 +178,11 @@ public class ScheduleService {
         scheduleRepository.deleteById(id);
     }
 
-    private String ensureClassExists(String classId) {
-        if (classId == null || classId.trim().isEmpty()) {
-            return null;
-        }
-        
-        String trimmedId = classId.trim();
-        if (!classRoomRepository.existsById(trimmedId)) {
-            // Nếu không tồn tại, tự động tạo mới học phần này
-            ClassRoom newClass = new ClassRoom(trimmedId, trimmedId, "Tự động tạo từ Lịch học");
-            classRoomRepository.save(newClass);
-        }
-        return trimmedId;
+    private void ensureClassExists(String classId) {
+        if (classId == null || classId.trim().isEmpty())
+            throw new RuntimeException("Mã học phần không được để trống");
+        if (!classRoomRepository.existsById(classId.trim()))
+            throw new RuntimeException("Học phần '" + classId.trim() + "' không tồn tại trong hệ thống");
     }
 
     private Schedule findOrThrow(String id) {

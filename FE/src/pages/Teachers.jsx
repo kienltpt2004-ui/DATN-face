@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { api } from '../utils/api';
-import { UserPlus, Search, Edit2, Trash2, Mail, Phone, BookOpen, X, Check, Upload, FileSpreadsheet } from 'lucide-react';
+import { UserPlus, Search, Edit2, Trash2, Mail, Phone, /* BookOpen, */ X, Check, Upload /*, FileSpreadsheet */ } from 'lucide-react';
 import { parseExcel } from '../utils/excelImport';
 
 export function Teachers() {
     const [teachersList, setTeachersList] = useState([]);
-    const [classes, setClasses] = useState([]);
+    // const [classes, setClasses] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [showModal, setShowModal] = useState(false);

@@ -20,6 +20,13 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
     @Query("SELECT a FROM AttendanceRecord a WHERE LOWER(TRIM(a.classId)) = LOWER(TRIM(:classId)) AND a.date BETWEEN :from AND :to")
     List<AttendanceRecord> findValidRecordsByClassAndDateRange(@Param("classId") String classId, @Param("from") LocalDate from, @Param("to") LocalDate to);
 
+    @Query("SELECT a FROM AttendanceRecord a WHERE LOWER(TRIM(a.classId)) = LOWER(TRIM(:classId)) AND a.date BETWEEN :from AND :to AND a.scheduleId IN :scheduleIds")
+    List<AttendanceRecord> findByClassAndDateRangeAndScheduleIds(@Param("classId") String classId, @Param("from") LocalDate from, @Param("to") LocalDate to, @Param("scheduleIds") List<String> scheduleIds);
+
+    @Query("SELECT a FROM AttendanceRecord a WHERE LOWER(a.classId) = LOWER(:classId) AND a.date = :date AND a.scheduleId IN :scheduleIds " +
+           "AND a.studentId IN (SELECT s.id FROM Student s JOIN s.classes c WHERE LOWER(c.id) = LOWER(:classId))")
+    List<AttendanceRecord> findValidRecordsByClassAndDateAndScheduleIds(@Param("classId") String classId, @Param("date") LocalDate date, @Param("scheduleIds") List<String> scheduleIds);
+
     List<AttendanceRecord> findByStudentIdAndDateBetween(String studentId, LocalDate from, LocalDate to);
 
     List<AttendanceRecord> findByClassIdAndDateBetween(String classId, LocalDate from, LocalDate to);
@@ -61,4 +68,8 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.data.jpa.repository.Query("DELETE FROM AttendanceRecord a WHERE a.studentId = :studentId")
     void deleteByStudentId(@org.springframework.data.repository.query.Param("studentId") String studentId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("DELETE FROM AttendanceRecord a WHERE a.scheduleId IN :scheduleIds")
+    void deleteByScheduleIdIn(@org.springframework.data.repository.query.Param("scheduleIds") List<String> scheduleIds);
 }

@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../utils/api';
-import { Check, X, Minus, Save, ShieldAlert, FileText, FileSpreadsheet, Clock } from 'lucide-react';
+import { Check, X, Save, ShieldAlert, FileText, FileSpreadsheet, Clock, ScanFace, Lock } from 'lucide-react';
 import { exportDailyAttendancePDF } from '../utils/pdfExport';
 import { exportDailyAttendanceExcel } from '../utils/excelExport';
 
@@ -10,9 +10,9 @@ const todayStr = new Date().toISOString().split('T')[0];
 function StatusButton({ status, current, onClick, disabled }) {
     const styles = {
         present: `border-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${current === 'present' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-200 text-gray-500 hover:border-emerald-400 hover:text-emerald-600'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`,
-        absent: `border-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${current === 'absent' ? 'bg-red-500 border-red-500 text-white' : 'border-gray-200 text-gray-500 hover:border-red-400 hover:text-red-600'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`,
-        late: `border-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${current === 'late' ? 'bg-orange-500 border-orange-500 text-white' : 'border-gray-200 text-gray-500 hover:border-orange-400 hover:text-orange-600'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`,
-        half: `border-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${current === 'half' ? 'bg-indigo-500 border-indigo-500 text-white' : 'border-gray-200 text-gray-500 hover:border-indigo-400 hover:text-indigo-600'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`,
+        absent:  `border-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${current === 'absent'  ? 'bg-red-500 border-red-500 text-white'         : 'border-gray-200 text-gray-500 hover:border-red-400 hover:text-red-600'}         ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`,
+        late:    `border-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${current === 'late'    ? 'bg-orange-500 border-orange-500 text-white'     : 'border-gray-200 text-gray-500 hover:border-orange-400 hover:text-orange-600'}   ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`,
+        half:    `border-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${current === 'half'    ? 'bg-indigo-500 border-indigo-500 text-white'     : 'border-gray-200 text-gray-500 hover:border-indigo-400 hover:text-indigo-600'}   ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`,
     };
     return (
         <button className={styles[status]} onClick={disabled ? null : onClick} disabled={disabled}>
@@ -22,21 +22,39 @@ function StatusButton({ status, current, onClick, disabled }) {
 }
 
 export function Attendance({ user }) {
-    const [classes, setClasses] = useState([]);
-    const [selectedClass, setSelectedClass] = useState('');
-    const [selectedDate, setSelectedDate] = useState(todayStr);
-    const [classStudents, setClassStudents] = useState([]);
-    const [attendance, setAttendance] = useState({});
-    const [loading, setLoading] = useState(false);
-    const [saved, setSaved] = useState(false);
-    const [hasSchedule, setHasSchedule] = useState(true);
-    const [isWithinTime, setIsWithinTime] = useState(true);
-    const [scheduleInfo, setScheduleInfo] = useState('');
+    const [classes, setClasses]               = useState([]);
+    const [selectedClass, setSelectedClass]   = useState('');
+    const [selectedDate, setSelectedDate]     = useState(todayStr);
+    const [classStudents, setClassStudents]   = useState([]);
+    const [attendance, setAttendance]         = useState({});
+    const [attendanceMeta, setAttendanceMeta] = useState({});
+    const [loading, setLoading]               = useState(false);
+    const [saved, setSaved]                   = useState(false);
+    const [hasSchedule, setHasSchedule]       = useState(true);
+    const [isWithinTime, setIsWithinTime]     = useState(true);
+    const [scheduleInfo, setScheduleInfo]     = useState('');
+    const [classEnded, setClassEnded]         = useState(false);
 
-    const isTeacher = user?.role?.toLowerCase() === 'teacher';
+    // Refs để timer callback luôn đọc được giá trị mới nhất của state
+    const attendanceRef    = useRef({});
+    const metaRef          = useRef({});
+    const studentsRef      = useRef([]);
+    const selectedClassRef = useRef('');
+    const selectedDateRef  = useRef('');
+    const endTimerRef      = useRef(null);
+    const autoSavedRef     = useRef(false);
+
+    useEffect(() => { attendanceRef.current    = attendance;     }, [attendance]);
+    useEffect(() => { metaRef.current          = attendanceMeta; }, [attendanceMeta]);
+    useEffect(() => { studentsRef.current      = classStudents;  }, [classStudents]);
+    useEffect(() => { selectedClassRef.current = selectedClass;  }, [selectedClass]);
+    useEffect(() => { selectedDateRef.current  = selectedDate;   }, [selectedDate]);
+
+    // Dọn dẹp timer khi component unmount
+    useEffect(() => () => { if (endTimerRef.current) clearTimeout(endTimerRef.current); }, []);
+
     const isHistory = selectedDate !== todayStr;
-    // Ràng buộc mới: Không cho phép điểm danh quá khứ/tương lai ở cả Client
-    const canEdit = !isHistory;
+    const canEdit   = !isHistory && !classEnded;
 
     useEffect(() => {
         const fetchClasses = async () => {
@@ -52,44 +70,109 @@ export function Attendance({ user }) {
     }, []);
 
     useEffect(() => {
-        if (selectedClass) {
-            fetchAttendanceData();
-        }
+        if (selectedClass) fetchAttendanceData();
     }, [selectedClass, selectedDate]);
 
+    // Hàm tự động lưu dùng ref — an toàn khi gọi từ bên trong setTimeout
+    const doAutoSave = async () => {
+        if (autoSavedRef.current) return;
+        autoSavedRef.current = true;
+
+        const students  = studentsRef.current;
+        const att       = attendanceRef.current;
+        const meta      = metaRef.current;
+        const classId   = selectedClassRef.current;
+        const date      = selectedDateRef.current;
+
+        const finalMap = {};
+        students.forEach(s => {
+            if (meta[s.id]?.method !== 'face_id') {
+                finalMap[s.id] = att[s.id] || 'absent';
+            }
+        });
+
+        if (Object.keys(finalMap).length === 0) { setSaved(true); return; }
+
+        try {
+            await api.post('/attendance/bulk', { date, classId, attendanceMap: finalMap });
+            setSaved(true);
+        } catch (e) {
+            console.error('Auto-save thất bại:', e);
+        }
+    };
+
     const fetchAttendanceData = async () => {
+        // Reset timer và trạng thái khoá trước mỗi lần fetch
+        if (endTimerRef.current) clearTimeout(endTimerRef.current);
+        autoSavedRef.current = false;
+        setClassEnded(false);
+
         setLoading(true);
-        setClassStudents([]); // Clear current list while loading
-        setAttendance({});   // Clear attendance map while loading
+        setClassStudents([]);
+        setAttendance({});
+        setAttendanceMeta({});
+
         try {
             const [studentsRes, attendanceRes, schedulesRes] = await Promise.all([
                 api.get(`/students/class/${selectedClass}`),
                 api.get(`/attendance?classId=${selectedClass}&date=${selectedDate}`),
                 api.get('/schedules')
             ]);
-            
-            // Check if class has schedule on this day
+
             const dateObj = new Date(selectedDate);
-            const dayMap = { 0: 'Chủ Nhật', 1: 'Thứ 2', 2: 'Thứ 3', 3: 'Thứ 4', 4: 'Thứ 5', 5: 'Thứ 6', 6: 'Thứ 7' };
-            const dayStr = dayMap[dateObj.getDay()];
-            
+            const dayMap  = { 0: 'Chủ Nhật', 1: 'Thứ 2', 2: 'Thứ 3', 3: 'Thứ 4', 4: 'Thứ 5', 5: 'Thứ 6', 6: 'Thứ 7' };
+            const dayStr  = dayMap[dateObj.getDay()];
+
             const classSchedule = schedulesRes.filter(s => s.classId === selectedClass && s.dayOfWeek === dayStr);
             setHasSchedule(classSchedule.length > 0);
-            
+
             if (classSchedule.length > 0) {
-                const now = new Date();
+                const now            = new Date();
                 const currentMinutes = now.getHours() * 60 + now.getMinutes();
-                
+
+                // Tính giờ kết thúc muộn nhất trong ngày
+                const maxEndMin = Math.max(...classSchedule.map(s => {
+                    const [eh, em] = s.endTime.split(':').map(Number);
+                    return eh * 60 + em;
+                }));
+
+                if (!isHistory && currentMinutes > maxEndMin) {
+                    // Đã hết giờ học — khoá ngay và tự động lưu với dữ liệu vừa fetch
+                    setClassEnded(true);
+                    autoSavedRef.current = true; // chặn doAutoSave gọi lại
+
+                    const finalMap = {};
+                    studentsRes.forEach(s => {
+                        const existing = attendanceRes.find(r => r.studentId === s.id);
+                        if (!existing || existing.method?.toLowerCase() !== 'face_id') {
+                            // Dùng status đang có (có thể đã chỉnh thủ công trước đó)
+                            const currentStatus = attendanceRes.find(r => r.studentId === s.id)?.status?.toLowerCase();
+                            finalMap[s.id] = currentStatus || 'absent';
+                        }
+                    });
+
+                    if (Object.keys(finalMap).length > 0) {
+                        await api.post('/attendance/bulk', {
+                            date: selectedDate,
+                            classId: selectedClass,
+                            attendanceMap: finalMap
+                        }).catch(e => console.error('Auto-save thất bại:', e));
+                    }
+                } else if (!isHistory) {
+                    // Đặt timer tự lưu đúng lúc hết giờ
+                    const msUntilEnd = (maxEndMin - currentMinutes) * 60_000 - now.getSeconds() * 1000;
+                    if (msUntilEnd > 0) {
+                        endTimerRef.current = setTimeout(async () => {
+                            setClassEnded(true);
+                            await doAutoSave();
+                        }, msUntilEnd);
+                    }
+                }
+
                 const within = classSchedule.some(s => {
                     const [sh, sm] = s.startTime.split(':').map(Number);
-                    const startMinForVisibility = sh * 60 + sm - 15; // Hiện lớp trước 15p
-                    const startMinForCheckin = sh * 60 + sm;      // Chỉ cho điểm danh từ lúc bắt đầu
-                    
-                    // Để hiện lớp trong danh sách: dùng startMinForVisibility
-                    // Nhưng để cho phép nút Lưu/Trạng thái: có thể dùng logic khác
-                    return currentMinutes >= startMinForVisibility;
+                    return currentMinutes >= sh * 60 + sm - 15;
                 });
-                
                 setIsWithinTime(within || isHistory);
                 setScheduleInfo(classSchedule.map(s => `${s.startTime} - ${s.endTime}`).join(', '));
             } else {
@@ -98,15 +181,25 @@ export function Attendance({ user }) {
             }
 
             setClassStudents(studentsRes);
-            
+
             const records = {};
-            // Initialize with default 'present' for all students
-            studentsRes.forEach(s => { records[s.id] = 'present'; });
-            // Override with actual records from BE
-            attendanceRes.forEach(r => { records[r.studentId] = r.status.toLowerCase(); });
-            
+            const meta    = {};
+            studentsRes.forEach(s => { records[s.id] = 'absent'; });
+            attendanceRes.forEach(r => {
+                records[r.studentId] = r.status.toLowerCase();
+                meta[r.studentId]    = {
+                    method:      r.method?.toLowerCase(),
+                    checkInTime: r.checkInTime,
+                    note:        r.note
+                };
+            });
+
             setAttendance(records);
-            setSaved(attendanceRes.length > 0 && !isHistory);
+            setAttendanceMeta(meta);
+
+            const allSaved = studentsRes.length > 0 &&
+                studentsRes.every(s => attendanceRes.some(r => r.studentId === s.id));
+            setSaved(allSaved && !isHistory);
         } catch (err) {
             console.error('Failed to fetch attendance:', err);
         } finally {
@@ -115,8 +208,10 @@ export function Attendance({ user }) {
     };
 
     const markAll = (status) => {
-        const updated = {};
-        classStudents.forEach(s => { updated[s.id] = status; });
+        const updated = { ...attendance };
+        classStudents.forEach(s => {
+            if (attendanceMeta[s.id]?.method !== 'face_id') updated[s.id] = status;
+        });
         setAttendance(updated);
         setSaved(false);
     };
@@ -130,20 +225,20 @@ export function Attendance({ user }) {
         if (classStudents.length === 0) return;
         setLoading(true);
         try {
-            // Đảm bảo tất cả sinh viên trong danh sách đều có trạng thái, mặc định là 'present'
-            const finalAttendance = { ...attendance };
+            const finalAttendance = {};
             classStudents.forEach(s => {
-                if (!finalAttendance[s.id]) {
-                    finalAttendance[s.id] = 'present';
+                if (attendanceMeta[s.id]?.method !== 'face_id') {
+                    finalAttendance[s.id] = attendance[s.id] || 'absent';
                 }
             });
 
-            await api.post('/attendance/bulk', {
-                date: selectedDate,
-                classId: selectedClass,
-                attendanceMap: finalAttendance
-            });
-            setAttendance(finalAttendance);
+            if (Object.keys(finalAttendance).length > 0) {
+                await api.post('/attendance/bulk', {
+                    date: selectedDate,
+                    classId: selectedClass,
+                    attendanceMap: finalAttendance
+                });
+            }
             setSaved(true);
         } catch (error) {
             alert('Lỗi khi lưu điểm danh: ' + error.message);
@@ -163,6 +258,20 @@ export function Attendance({ user }) {
                     <p className="text-sm font-medium">Hệ thống chỉ cho phép ghi nhận hoặc chỉnh sửa điểm danh trong <b>ngày hôm nay</b> ({todayStr}). Bạn hiện đang ở chế độ xem lịch sử.</p>
                 </div>
             )}
+
+            {/* Banner khoá khi hết giờ học */}
+            {classEnded && !isHistory && (
+                <div className="flex items-center gap-4 p-5 bg-gray-50 border border-gray-300 rounded-3xl text-gray-700 animate-fade-in">
+                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center shrink-0">
+                        <Lock size={20} className="text-gray-500" />
+                    </div>
+                    <div>
+                        <p className="font-bold">Đã kết thúc giờ học — Điểm danh bị khoá</p>
+                        <p className="text-xs opacity-70 mt-0.5">Kết quả điểm danh đã được tự động lưu. Học sinh chưa điểm danh được ghi nhận là <b>Vắng</b>. Không thể chỉnh sửa sau khi hết giờ.</p>
+                    </div>
+                </div>
+            )}
+
             {/* Controls */}
             <div className="card">
                 <div className="flex flex-wrap items-end gap-6">
@@ -197,16 +306,21 @@ export function Attendance({ user }) {
                         </button>
                     </div>
                 </div>
-                
+
                 <div className="flex items-center gap-3">
-                    <button 
-                        className={`btn-primary flex items-center gap-2 px-8 py-3 rounded-2xl shadow-lg transition-all active:scale-95 ${saved ? 'bg-emerald-500 border-emerald-500 ring-4 ring-emerald-100' : 'hover:shadow-indigo-200 shadow-indigo-100'}`}
-                        onClick={handleSave}
-                        disabled={!canEdit || loading || classStudents.length === 0 || !hasSchedule || (!isWithinTime && !isHistory)}
-                    >
-                        {saved ? <Check size={20} /> : <Save size={20} />}
-                        <span className="font-bold">{saved ? 'ĐÃ LƯU DỮ LIỆU' : 'LƯU ĐIỂM DANH'}</span>
-                    </button>
+                    {classEnded && !isHistory
+                        ? <div className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gray-100 text-gray-500 text-sm font-bold">
+                            <Lock size={16} /> ĐÃ KHOÁ
+                          </div>
+                        : <button
+                            className={`btn-primary flex items-center gap-2 px-8 py-3 rounded-2xl shadow-lg transition-all active:scale-95 ${saved ? 'bg-emerald-500 border-emerald-500 ring-4 ring-emerald-100' : 'hover:shadow-indigo-200 shadow-indigo-100'}`}
+                            onClick={handleSave}
+                            disabled={!canEdit || loading || classStudents.length === 0 || !hasSchedule || (!isWithinTime && !isHistory)}
+                          >
+                            {saved ? <Check size={20} /> : <Save size={20} />}
+                            <span className="font-bold">{saved ? 'ĐÃ LƯU DỮ LIỆU' : 'LƯU ĐIỂM DANH'}</span>
+                          </button>
+                    }
                 </div>
             </div>
 
@@ -222,25 +336,24 @@ export function Attendance({ user }) {
                 </div>
             )}
 
-            {hasSchedule && !isWithinTime && !isHistory && (
+            {hasSchedule && !isWithinTime && !isHistory && !classEnded && (
                 <div className="flex items-center gap-4 p-5 bg-blue-50 border border-blue-200 rounded-3xl text-blue-800 animate-fade-in">
                     <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
                         <Clock size={24} />
                     </div>
                     <div>
-                        <p className="font-bold">Chưa đến (hoặc đã quá) giờ học!</p>
+                        <p className="font-bold">Chưa đến giờ học!</p>
                         <p className="text-xs opacity-80">
-                            Thời gian hệ thống: <span className="font-bold">{new Date().toLocaleTimeString('vi-VN', {hour: '2-digit', minute: '2-digit'})}</span>. 
-                            Khung giờ học: <span className="font-bold">{scheduleInfo}</span>. 
+                            Thời gian hệ thống: <span className="font-bold">{new Date().toLocaleTimeString('vi-VN', {hour: '2-digit', minute: '2-digit'})}</span>.
+                            Khung giờ học: <span className="font-bold">{scheduleInfo}</span>.
                             <br/>
-                            <span className="text-[10px] font-bold opacity-70 italic">* Lưu ý: Lớp hiện sớm 15p, chỉ bắt đầu điểm danh khi đến giờ học. Sau 15p tính là Muộn, sau 30p tính là Nửa buổi.</span>
+                            <span className="text-[10px] font-bold opacity-70 italic">* Lớp hiện sớm 15p trước giờ. Sau 15p tính Muộn, sau 30p tính Nửa buổi.</span>
                         </p>
                     </div>
                 </div>
             )}
 
             <div className="grid grid-cols-1 gap-5">
-                {/* Attendance list */}
                 <div className="card p-0 overflow-hidden shadow-sm border border-gray-100 relative min-h-[300px]">
                     {loading && (
                         <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] flex items-center justify-center z-10">
@@ -271,33 +384,31 @@ export function Attendance({ user }) {
                                 </div>
                             </div>
                         </div>
+
+                        {/* Nút xuất file — hiện khi đã lưu (dù là lưu tay hay tự động) */}
                         {saved
                             ? <div className="flex items-center gap-2">
-                                <span className="flex items-center gap-1 text-emerald-600 text-sm font-medium mr-2 animate-fade-in"><Check size={15} strokeWidth={3} /> Đã lưu thành công</span>
+                                <span className="flex items-center gap-1 text-emerald-600 text-sm font-medium mr-2 animate-fade-in">
+                                    <Check size={15} strokeWidth={3} /> Đã lưu thành công
+                                </span>
                                 <button className="btn-secondary py-1.5 flex items-center gap-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50 shadow-sm"
-                                    onClick={() => exportDailyAttendancePDF({
-                                        className: selectedClass,
-                                        date: selectedDate,
-                                        students: classStudents,
-                                        attendanceMap: attendance
-                                    })}>
+                                    onClick={() => exportDailyAttendancePDF({ className: selectedClass, date: selectedDate, students: classStudents, attendanceMap: attendance })}>
                                     <FileText size={14} /> Xuất PDF
                                 </button>
                                 <button className="btn-secondary py-1.5 flex items-center gap-2 border-emerald-200 text-emerald-600 hover:bg-emerald-50 shadow-sm"
-                                    onClick={() => exportDailyAttendanceExcel({
-                                        className: selectedClass,
-                                        date: selectedDate,
-                                        students: classStudents,
-                                        attendanceMap: attendance
-                                    })}>
+                                    onClick={() => exportDailyAttendanceExcel({ className: selectedClass, date: selectedDate, students: classStudents, attendanceMap: attendance })}>
                                     <FileSpreadsheet size={14} /> Xuất Excel
                                 </button>
-                            </div>
-                            : <button className={`btn-primary py-2 px-6 shadow-lg shadow-indigo-100 ${(!canEdit || loading) ? 'opacity-50 cursor-not-allowed' : ''}`} onClick={(canEdit && !loading) ? handleSave : null} disabled={!canEdit || loading}>
+                              </div>
+                            : <button
+                                className={`btn-primary py-2 px-6 shadow-lg shadow-indigo-100 ${(!canEdit || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                onClick={(canEdit && !loading) ? handleSave : null}
+                                disabled={!canEdit || loading}>
                                 <Save size={16} /> Lưu kết quả
-                            </button>
+                              </button>
                         }
                     </div>
+
                     <div className="overflow-y-auto max-h-[600px]">
                         <table className="w-full text-sm">
                             <thead className="sticky top-0 bg-white z-10 border-b border-gray-100">
@@ -323,11 +434,32 @@ export function Attendance({ user }) {
                                             </div>
                                         </td>
                                         <td className="px-5 py-4">
-                                            <div className="flex items-center justify-center gap-3">
-                                                <StatusButton status="present" current={attendance[s.id]} onClick={() => setStatus(s.id, 'present')} disabled={!canEdit} />
-                                                <StatusButton status="late" current={attendance[s.id]} onClick={() => setStatus(s.id, 'late')} disabled={!canEdit} />
-                                                <StatusButton status="half" current={attendance[s.id]} onClick={() => setStatus(s.id, 'half')} disabled={!canEdit} />
-                                                <StatusButton status="absent" current={attendance[s.id]} onClick={() => setStatus(s.id, 'absent')} disabled={!canEdit} />
+                                            <div className="flex flex-col items-center gap-2">
+                                                {attendanceMeta[s.id]?.method === 'face_id' && (
+                                                    <div className="flex items-center gap-2 flex-wrap justify-center">
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-violet-50 border border-violet-200 text-violet-700 text-[11px] font-semibold">
+                                                            <ScanFace size={12} />
+                                                            Đã điểm danh bằng khuôn mặt
+                                                        </span>
+                                                        {attendanceMeta[s.id]?.checkInTime && (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[11px] font-medium">
+                                                                <Clock size={10} />
+                                                                {attendanceMeta[s.id].checkInTime.substring(0, 5)}
+                                                            </span>
+                                                        )}
+                                                        {attendanceMeta[s.id]?.note && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[11px] font-medium border border-amber-200">
+                                                                {attendanceMeta[s.id].note}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                <div className="flex items-center justify-center gap-3">
+                                                    <StatusButton status="present" current={attendance[s.id]} onClick={() => setStatus(s.id, 'present')} disabled={!canEdit} />
+                                                    <StatusButton status="late"    current={attendance[s.id]} onClick={() => setStatus(s.id, 'late')}    disabled={!canEdit} />
+                                                    <StatusButton status="half"    current={attendance[s.id]} onClick={() => setStatus(s.id, 'half')}    disabled={!canEdit} />
+                                                    <StatusButton status="absent"  current={attendance[s.id]} onClick={() => setStatus(s.id, 'absent')}  disabled={!canEdit} />
+                                                </div>
                                             </div>
                                         </td>
                                     </tr>

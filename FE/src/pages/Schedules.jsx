@@ -49,9 +49,9 @@ export function Schedules({ user }) {
     };
 
     const filtered = schedulesList.filter(s =>
-        s.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.classId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (!isTeacher && s.teacherName?.toLowerCase().includes(searchTerm.toLowerCase()))
+        (s.subject || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (s.classId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (!isTeacher && (s.teacherName || '').toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
     const handleSave = async (e) => {
@@ -71,14 +71,21 @@ export function Schedules({ user }) {
         const classId = formData.classId;
         const day = formData.dayOfWeek;
 
-        const isOverlap = (s1Start, s1End, s2Start, s2End) => {
-            return s1Start < s2End && s1End > s2Start;
-        };
+        if (!start || !end) {
+            alert('Vui lòng nhập giờ bắt đầu và giờ kết thúc');
+            return;
+        }
+        if (start >= end) {
+            alert('Giờ bắt đầu phải trước giờ kết thúc');
+            return;
+        }
 
-        const conflict = schedulesList.find(s => {
+        const isOverlap = (s1Start, s1End, s2Start, s2End) => s1Start < s2End && s1End > s2Start;
+
+        let conflictMsg = null;
+        schedulesList.some(s => {
             if (editingSchedule && s.id === editingSchedule.id) return false;
-            
-            // Chuẩn hóa ngày để so sánh (hỗ trợ cả dữ liệu cũ MONDAY và dữ liệu mới Thứ 2)
+
             const vnDay = {
                 'MONDAY': 'Thứ 2', 'TUESDAY': 'Thứ 3', 'WEDNESDAY': 'Thứ 4',
                 'THURSDAY': 'Thứ 5', 'FRIDAY': 'Thứ 6', 'SATURDAY': 'Thứ 7', 'SUNDAY': 'Chủ Nhật'
@@ -88,20 +95,23 @@ export function Schedules({ user }) {
 
             if (isOverlap(start, end, s.startTime, s.endTime)) {
                 if (s.room?.trim().toUpperCase() === room) {
-                    return `Phòng ${room} đã có lịch dạy của lớp ${s.classId} (${s.startTime} - ${s.endTime})`;
+                    conflictMsg = `Phòng ${room} đã có lịch dạy của lớp ${s.classId} (${s.startTime} - ${s.endTime})`;
+                    return true;
                 }
                 if (s.teacherId === teacherId) {
-                    return `Giáo viên đã có lịch dạy lớp ${s.classId} vào khung giờ này`;
+                    conflictMsg = `Giáo viên đã có lịch dạy lớp ${s.classId} vào khung giờ này`;
+                    return true;
                 }
                 if (s.classId === classId) {
-                    return `Lớp ${classId} đã có lịch học vào khung giờ này`;
+                    conflictMsg = `Lớp ${classId} đã có lịch học vào khung giờ này`;
+                    return true;
                 }
             }
             return false;
         });
 
-        if (conflict && typeof conflict === 'string') {
-            alert('CẢNH BÁO TRÙNG LỊCH: ' + conflict);
+        if (conflictMsg) {
+            alert('CẢNH BÁO TRÙNG LỊCH: ' + conflictMsg);
             return;
         }
         // --- End Frontend Validation ---
@@ -150,9 +160,14 @@ export function Schedules({ user }) {
                 {!isTeacher && (
                     <button
                         className="btn-primary flex items-center gap-2"
-                        onClick={() => { 
-                            const autoId = 'SCH-' + Math.floor(1000 + Math.random() * 9000);
-                            setEditingSchedule(null); 
+                        onClick={() => {
+                            const existingNums = schedulesList
+                                .map(s => s.id)
+                                .filter(id => /^SCH-\d+$/.test(id))
+                                .map(id => parseInt(id.replace('SCH-', '')));
+                            const nextNum = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
+                            const autoId = 'SCH-' + nextNum;
+                            setEditingSchedule(null);
                             setFormData({ 
                                 id: autoId,
                                 subject: '', 

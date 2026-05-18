@@ -7,10 +7,10 @@ import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.view.View;
-import android.widget.ArrayAdapter;
+// import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ImageView;
-import android.widget.Spinner;
+// import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.Manifest;
@@ -32,7 +32,7 @@ import com.example.cdtn.model.AttendanceResponse;
 import com.example.cdtn.model.AvailableSchedule;
 import com.example.cdtn.utils.ImageUtils;
 
-import java.util.ArrayList;
+// import java.util.ArrayList;
 import java.util.List;
 
 import retrofit2.Call;
@@ -137,16 +137,19 @@ public class AttendanceActivity extends AppCompatActivity {
             public void onResponse(Call<ApiResponse<AttendanceResponse>> call, Response<ApiResponse<AttendanceResponse>> response) {
                 if (response.isSuccessful() && response.body() != null) {
                     AttendanceResponse data = response.body().getData();
-                    Toast.makeText(AttendanceActivity.this, "Điểm danh thành công!\n" + data.getStudentName(), Toast.LENGTH_LONG).show();
+                    String msg = "Điểm danh thành công!";
+                    if (data != null && data.getStudentName() != null) {
+                        msg += "\n" + data.getStudentName();
+                    }
+                    Toast.makeText(AttendanceActivity.this, msg, Toast.LENGTH_LONG).show();
                     finish();
                 } else {
                     String errorMsg = "Lỗi hệ thống";
                     try {
                         if (response.errorBody() != null) {
                             String errorJson = response.errorBody().string();
-                            if (errorJson.contains("\"message\":\"")) {
-                                errorMsg = errorJson.split("\"message\":\"")[1].split("\"")[0];
-                            }
+                            org.json.JSONObject obj = new org.json.JSONObject(errorJson);
+                            errorMsg = obj.optString("message", "Lỗi hệ thống");
                         }
                     } catch (Exception ignored) {}
 
@@ -252,13 +255,20 @@ public class AttendanceActivity extends AppCompatActivity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == CAMERA_REQUEST && resultCode == Activity.RESULT_OK) {
-            bitmap = (Bitmap) data.getExtras().get("data");
+            if (data == null || data.getExtras() == null) {
+                Toast.makeText(this, "Không lấy được ảnh từ camera", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            Bitmap captured = (Bitmap) data.getExtras().get("data");
+            if (captured == null) {
+                Toast.makeText(this, "Ảnh rỗng, vui lòng thử lại", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            bitmap = captured;
             ImageView imageView = findViewById(R.id.imageView);
             imageView.setImageBitmap(bitmap);
-        } else if (requestCode == REQUEST_CHECK_SETTINGS) {
-            if (resultCode == Activity.RESULT_OK) {
-                Toast.makeText(this, "GPS đã được bật", Toast.LENGTH_SHORT).show();
-            }
+        } else if (requestCode == REQUEST_CHECK_SETTINGS && resultCode == Activity.RESULT_OK) {
+            Toast.makeText(this, "GPS đã được bật", Toast.LENGTH_SHORT).show();
         }
     }
 }

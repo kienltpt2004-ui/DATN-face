@@ -2,7 +2,6 @@ package com.attendance.backend.controller;
 
 import com.attendance.backend.entity.Location;
 import com.attendance.backend.service.LocationService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -11,11 +10,13 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/locations")
-@CrossOrigin(origins = "*")
 public class LocationController {
 
-    @Autowired
-    private LocationService locationService;
+    private final LocationService locationService;
+
+    public LocationController(LocationService locationService) {
+        this.locationService = locationService;
+    }
 
     @GetMapping
     public List<Location> getAllLocations() {
@@ -54,6 +55,6 @@ public class LocationController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> deleteLocation(@PathVariable String id) {
         locationService.deleteLocation(id);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.noContent().build();
     }
 }

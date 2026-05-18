@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../utils/api';
-import { Users, CheckCircle, XCircle, Clock, TrendingUp, Calendar, BookOpen, Clock3, MapPin, ArrowRight } from 'lucide-react';
+import { Users, CheckCircle, XCircle, Clock, TrendingUp, Calendar, BookOpen /*, Clock3, MapPin, ArrowRight */ } from 'lucide-react';
 
 function StatCard({ title, value, subtitle, icon: Icon, color, loading }) {
     return (
@@ -48,7 +48,7 @@ export function Dashboard({ user }) {
         fetchDashboardData();
     }, []);
 
-    const isTeacher = user?.role?.toLowerCase() === 'teacher';
+    // const isTeacher = user?.role?.toLowerCase() === 'teacher';
     
     // Fallback values if data is loading or missing
     const stats = statsData || {
@@ -62,10 +62,11 @@ export function Dashboard({ user }) {
         recentActivities: []
     };
 
-    const VN_DAYS = ['Chủ Nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
-    const todayVN = VN_DAYS[new Date().getDay()];
+    // const VN_DAYS = ['Chủ Nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+    // const todayVN = VN_DAYS[new Date().getDay()];
 
     const maxRate = stats.weeklyStats.length ? Math.max(...stats.weeklyStats.map(d => d.rate)) : 100;
+    const BAR_MAX_PX = 96; // chiều cao tối đa của thanh (px)
 
     return (
         <div className="space-y-8 animate-fade-in pb-10">
@@ -87,20 +88,24 @@ export function Dashboard({ user }) {
                         </div>
                         <TrendingUp size={18} className="text-indigo-500" />
                     </div>
-                    <div className="flex items-end gap-3 h-36">
-                        {stats.weeklyStats.map(({ date, label, rate }) => (
-                            <div key={date} className="flex-1 flex flex-col items-center gap-1">
-                                <span className="text-[10px] font-bold text-gray-500">{rate > 0 ? `${rate}%` : ''}</span>
-                                <div className="w-full rounded-t-lg bg-indigo-500 transition-all hover:bg-indigo-600"
-                                    style={{ height: `${(rate / (maxRate || 1)) * 100}%`, minHeight: '4px' }}
-                                    title={`${date}: ${rate}%`}
-                                />
-                                <span className="text-[10px] text-gray-400">{label}</span>
-                            </div>
-                        ))}
+                    <div className="flex items-end gap-3" style={{ height: '144px' }}>
+                        {stats.weeklyStats.map(({ date, label, rate }) => {
+                            const barPx = Math.max((rate / (maxRate || 1)) * BAR_MAX_PX, rate > 0 ? 4 : 0);
+                            return (
+                                <div key={date} className="flex-1 flex flex-col items-center gap-1">
+                                    <span className="text-[10px] font-bold text-gray-500">{rate > 0 ? `${rate}%` : ''}</span>
+                                    <div
+                                        className="w-full rounded-t-lg bg-indigo-500 transition-all hover:bg-indigo-600"
+                                        style={{ height: `${barPx}px` }}
+                                        title={`${date}: ${rate}%`}
+                                    />
+                                    <span className="text-[10px] text-gray-400 text-center leading-tight">{label}</span>
+                                </div>
+                            );
+                        })}
                         {stats.weeklyStats.length === 0 && Array(7).fill(0).map((_, i) => (
                             <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                                <div className="w-full h-2 rounded-t-lg bg-gray-100" />
+                                <div className="w-full rounded-t-lg bg-gray-100" style={{ height: '4px' }} />
                                 <span className="text-[10px] text-gray-400">—</span>
                             </div>
                         ))}

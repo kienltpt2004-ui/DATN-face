@@ -11,6 +11,7 @@ import com.attendance.backend.repository.StudentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.attendance.backend.utils.TimeUtils;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -18,7 +19,6 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,7 +26,7 @@ import org.slf4j.LoggerFactory;
 public class AttendanceService {
 
     private static final Logger logger = LoggerFactory.getLogger(AttendanceService.class);
-    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("[HH:mm][H:mm][HH:mm:ss]");
+    private static final DateTimeFormatter TIME_FORMATTER = TimeUtils.TIME_FORMATTER;
 
     private final AttendanceRecordRepository attendanceRepo;
     private final StudentRepository studentRepository;
@@ -58,9 +58,31 @@ public class AttendanceService {
                 .stream().map(this::toDTO).toList();
     }
 
-    /** Lấy toàn bộ điểm danh theo lớp trong khoảng ngày */
+    /** Lấy toàn bộ điểm danh theo lớp trong khoảng ngày (Admin: tất cả giáo viên) */
     public List<AttendanceRecordDTO> getByClassAndDateRange(String classId, LocalDate from, LocalDate to) {
         return attendanceRepo.findValidRecordsByClassAndDateRange(classId, from, to)
+                .stream().map(this::toDTO).toList();
+    }
+
+    /** Lấy điểm danh theo lớp trong khoảng ngày, chỉ lấy buổi do teacherId dạy */
+    public List<AttendanceRecordDTO> getByClassAndDateRangeForTeacher(String classId, LocalDate from, LocalDate to, String teacherId) {
+        List<String> scheduleIds = scheduleRepository.findByTeacherIdIgnoreCase(teacherId).stream()
+                .filter(s -> s.getClassId().equalsIgnoreCase(classId))
+                .map(com.attendance.backend.entity.Schedule::getId)
+                .toList();
+        if (scheduleIds.isEmpty()) return List.of();
+        return attendanceRepo.findByClassAndDateRangeAndScheduleIds(classId, from, to, scheduleIds)
+                .stream().map(this::toDTO).toList();
+    }
+
+    /** Lấy điểm danh theo lớp và ngày, chỉ lấy buổi do teacherId dạy */
+    public List<AttendanceRecordDTO> getByClassAndDateForTeacher(String classId, LocalDate date, String teacherId) {
+        List<String> scheduleIds = scheduleRepository.findByTeacherIdIgnoreCase(teacherId).stream()
+                .filter(s -> s.getClassId().equalsIgnoreCase(classId))
+                .map(com.attendance.backend.entity.Schedule::getId)
+                .toList();
+        if (scheduleIds.isEmpty()) return List.of();
+        return attendanceRepo.findValidRecordsByClassAndDateAndScheduleIds(classId, date, scheduleIds)
                 .stream().map(this::toDTO).toList();
     }
 
@@ -96,7 +118,8 @@ public class AttendanceService {
                 logger.info("Schedule: {} - {}, Match: {}", s.getStartTime(), s.getEndTime(), match);
                 return match;
             } catch (DateTimeParseException e) {
-                logger.error("Failed to parse time for schedule {}: {} - {}", s.getId(), s.getStartTime(), s.getEndTime());
+                logger.error("Không thể parse giờ của schedule {}: startTime='{}', endTime='{}', lỗi: {}",
+                        s.getId(), s.getStartTime(), s.getEndTime(), e.getMessage());
                 return false;
             }
         });
@@ -131,6 +154,12 @@ public class AttendanceService {
             AttendanceRecord record = attendanceRepo
                     .findByStudentIdAndDateAndClassIdAndScheduleId(studentId, date, request.getClassId(), request.getScheduleId())
                     .orElse(null);
+
+            // Bảo toàn bản ghi điểm danh bằng khuôn mặt — không cho phép bulk save ghi đè
+            if (record != null && record.getMethod() == AttendanceRecord.Method.FACE_ID) {
+                saved.add(record);
+                return;
+            }
 
             if (record == null) {
                 record = AttendanceRecord.builder()
@@ -192,7 +221,11 @@ public class AttendanceService {
         record.setStatus(AttendanceRecord.AttendanceStatus.valueOf(dto.getStatus().toLowerCase()));
         if (dto.getNote() != null) record.setNote(dto.getNote());
         if (dto.getCheckInTime() != null) {
-            record.setCheckInTime(LocalTime.parse(dto.getCheckInTime()));
+            try {
+                record.setCheckInTime(LocalTime.parse(dto.getCheckInTime(), TIME_FORMATTER));
+            } catch (DateTimeParseException e) {
+                throw new RuntimeException("Định dạng giờ check-in không hợp lệ: " + dto.getCheckInTime());
+            }
         }
 
         return toDTO(attendanceRepo.save(record));

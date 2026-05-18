@@ -33,6 +33,7 @@ public class SemesterService {
 
     @Transactional
     public Semester create(Semester semester) {
+        validateSemester(semester, null);
         semester.setIsActive(false);
         return semesterRepository.save(semester);
     }
@@ -40,6 +41,7 @@ public class SemesterService {
     @Transactional
     public Semester update(Long id, Semester updated) {
         Semester semester = getById(id);
+        validateSemester(updated, id);
         semester.setName(updated.getName());
         semester.setStartDate(updated.getStartDate());
         semester.setEndDate(updated.getEndDate());
@@ -48,7 +50,6 @@ public class SemesterService {
 
     @Transactional
     public Semester setActive(Long id) {
-        // Deactivate current active semester
         semesterRepository.findByIsActiveTrue().ifPresent(current -> {
             current.setIsActive(false);
             semesterRepository.save(current);
@@ -61,9 +62,26 @@ public class SemesterService {
     @Transactional
     public void delete(Long id) {
         Semester semester = getById(id);
-        if (semester.getIsActive()) {
+        if (semester.getIsActive())
             throw new RuntimeException("Không thể xóa học kỳ đang hoạt động");
-        }
         semesterRepository.deleteById(id);
+    }
+
+    private void validateSemester(Semester semester, Long excludeId) {
+        if (semester.getName() == null || semester.getName().isBlank())
+            throw new RuntimeException("Tên học kỳ không được để trống");
+        if (semester.getStartDate() == null)
+            throw new RuntimeException("Ngày bắt đầu không được để trống");
+        if (semester.getEndDate() == null)
+            throw new RuntimeException("Ngày kết thúc không được để trống");
+        if (!semester.getStartDate().isBefore(semester.getEndDate()))
+            throw new RuntimeException("Ngày bắt đầu phải trước ngày kết thúc");
+
+        // Kiểm tra tên trùng (bỏ qua chính học kỳ đang update)
+        boolean nameTaken = semesterRepository.findAll().stream()
+                .anyMatch(s -> s.getName().equalsIgnoreCase(semester.getName().trim())
+                        && !s.getId().equals(excludeId));
+        if (nameTaken)
+            throw new RuntimeException("Tên học kỳ đã tồn tại: " + semester.getName());
     }
 }

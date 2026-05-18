@@ -10,38 +10,50 @@ const setupFonts = (doc) => {
     doc.setFont('Roboto');
 };
 
+const addFooter = (doc) => {
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setFont('Roboto', 'normal');
+        doc.setTextColor(150);
+        doc.text(
+            `Trang ${i}/${pageCount}  |  Attendance AI - Hệ thống quản lý điểm danh`,
+            doc.internal.pageSize.width / 2,
+            doc.internal.pageSize.height - 5,
+            { align: 'center' }
+        );
+    }
+};
+
 const STATUS_LABEL = {
     present: 'Có mặt',
     absent: 'Vắng',
     late: 'Muộn',
 };
 
+const TABLE_STYLES = {
+    styles: { font: 'Roboto', fontSize: 9, cellPadding: 2 },
+    headStyles: { fillColor: [63, 81, 181], textColor: 255, fontStyle: 'bold', font: 'Roboto' },
+    alternateRowStyles: { fillColor: [245, 245, 255] },
+};
+
 /**
  * Xuất báo cáo điểm danh ra PDF
- * @param {object} options
- * @param {string} options.className
- * @param {string} options.fromDate
- * @param {string} options.toDate
- * @param {Array} options.students
- * @param {Array} options.dates
- * @param {Array} options.records
  */
 export function exportAttendancePDF({ className, fromDate, toDate, students, dates, records }) {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     setupFonts(doc);
 
-    // Tiêu đề
     doc.setFont('Roboto', 'bold');
     doc.setFontSize(16);
-    doc.text('BANG DIEM DANH HOC SINH', doc.internal.pageSize.width / 2, 15, { align: 'center' });
+    doc.text('BẢNG ĐIỂM DANH HỌC SINH', doc.internal.pageSize.width / 2, 15, { align: 'center' });
 
     doc.setFontSize(11);
     doc.setFont('Roboto', 'normal');
-    doc.text(`Lop: ${className}   |   Tu ngay: ${fromDate}   den ngay: ${toDate}`, doc.internal.pageSize.width / 2, 22, { align: 'center' });
-    doc.text(`Ngay xuat: ${new Date().toLocaleDateString('vi-VN')}`, doc.internal.pageSize.width / 2, 28, { align: 'center' });
+    doc.text(`Lớp: ${className}   |   Từ ngày: ${fromDate}   đến ngày: ${toDate}`, doc.internal.pageSize.width / 2, 22, { align: 'center' });
+    doc.text(`Ngày xuất: ${new Date().toLocaleDateString('vi-VN')}`, doc.internal.pageSize.width / 2, 28, { align: 'center' });
 
-    // Bảng tổng hợp
-    const summaryHead = [['STT', 'Học sinh', 'Có mặt', 'Vắng', 'Muộn', 'Tỷ lệ (%)']];
     const summaryBody = students.map((s, i) => {
         const studentRecords = records.filter(r => r.studentId === s.id);
         const present = studentRecords.filter(r => r.status === 'present').length;
@@ -54,11 +66,9 @@ export function exportAttendancePDF({ className, fromDate, toDate, students, dat
 
     autoTable(doc, {
         startY: 34,
-        head: summaryHead,
+        head: [['STT', 'Học sinh', 'Có mặt', 'Vắng', 'Muộn', 'Tỷ lệ (%)']],
         body: summaryBody,
-        styles: { font: 'Roboto', fontSize: 9, cellPadding: 2 },
-        headStyles: { fillColor: [63, 81, 181], textColor: 255, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [240, 240, 255] },
+        ...TABLE_STYLES,
         columnStyles: {
             0: { halign: 'center', cellWidth: 12 },
             2: { halign: 'center' },
@@ -68,30 +78,27 @@ export function exportAttendancePDF({ className, fromDate, toDate, students, dat
         },
     });
 
-    // Thêm trang chi tiết từng ngày nếu có nhiều ngày
     if (dates.length > 0) {
         doc.addPage();
-        doc.setFont('helvetica', 'bold');
+        doc.setFont('Roboto', 'bold');
         doc.setFontSize(13);
         doc.text('CHI TIẾT ĐIỂM DANH TỪNG NGÀY', doc.internal.pageSize.width / 2, 15, { align: 'center' });
 
-        const detailHead = [['STT', 'Học sinh', ...dates.map(d => d.slice(5))]]; // MM-DD
         const detailBody = students.map((s, i) => {
             const row = [i + 1, s.name];
             dates.forEach(date => {
                 const rec = records.find(r => r.studentId === s.id && r.date === date);
-                const symbol = rec?.status === 'present' ? 'P' : rec?.status === 'absent' ? 'V' : rec?.status === 'late' ? 'M' : '-';
-                row.push(symbol);
+                row.push(rec?.status === 'present' ? 'P' : rec?.status === 'absent' ? 'V' : rec?.status === 'late' ? 'M' : '-');
             });
             return row;
         });
 
         autoTable(doc, {
             startY: 22,
-            head: detailHead,
+            head: [['STT', 'Học sinh', ...dates.map(d => d.slice(5))]],
             body: detailBody,
-            styles: { font: 'helvetica', fontSize: 7, cellPadding: 1.5 },
-            headStyles: { fillColor: [63, 81, 181], textColor: 255, fontStyle: 'bold' },
+            styles: { font: 'Roboto', fontSize: 7, cellPadding: 1.5 },
+            headStyles: { fillColor: [63, 81, 181], textColor: 255, fontStyle: 'bold', font: 'Roboto' },
             columnStyles: {
                 0: { halign: 'center', cellWidth: 10 },
                 1: { cellWidth: 40 },
@@ -107,53 +114,50 @@ export function exportAttendancePDF({ className, fromDate, toDate, students, dat
         });
     }
 
-    // Footer
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(150);
-        doc.text(`Trang ${i}/${pageCount}  |  Attendance AI - Hệ thống quản lý điểm danh`, doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 5, { align: 'center' });
-    }
-
+    addFooter(doc);
     doc.save(`diemdanh_${className}_${fromDate}_${toDate}.pdf`);
 }
 
 /**
  * Xuất danh sách học sinh ra PDF
+ * @param {Array} students - danh sách học sinh
+ * @param {{ showClassCol?: boolean, className?: string }} options
  */
-export function exportStudentListPDF(students) {
+export function exportStudentListPDF(students, { showClassCol = true, className = '' } = {}) {
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     setupFonts(doc);
 
     doc.setFont('Roboto', 'bold');
     doc.setFontSize(14);
-    doc.text('DANH SACH HOC SINH', doc.internal.pageSize.width / 2, 15, { align: 'center' });
+    doc.text('DANH SÁCH HỌC SINH', doc.internal.pageSize.width / 2, 15, { align: 'center' });
 
     doc.setFont('Roboto', 'normal');
     doc.setFontSize(10);
-    doc.text(`Ngay xuat: ${new Date().toLocaleDateString('vi-VN')}`, doc.internal.pageSize.width / 2, 22, { align: 'center' });
+    const subLines = [];
+    if (className) subLines.push(`Lớp: ${className}`);
+    subLines.push(`Ngày xuất: ${new Date().toLocaleDateString('vi-VN')}`);
+    doc.text(subLines.join('   |   '), doc.internal.pageSize.width / 2, 22, { align: 'center' });
+
+    const head = showClassCol
+        ? [['STT', 'Mã HS', 'Họ tên', 'Lớp', 'Giới tính', 'Ngày sinh', 'SĐT']]
+        : [['STT', 'Mã HS', 'Họ tên', 'Giới tính', 'Ngày sinh', 'SĐT']];
+
+    const body = students.map((s, i) => showClassCol
+        ? [i + 1, s.id, s.name, s.classId || '—', s.gender, s.dob, s.phone]
+        : [i + 1, s.id, s.name, s.gender, s.dob, s.phone]
+    );
 
     autoTable(doc, {
         startY: 28,
-        head: [['STT', 'Mã HS', 'Họ tên', 'Lớp', 'Giới tính', 'Ngày sinh', 'SĐT']],
-        body: students.map((s, i) => [i + 1, s.id, s.name, s.class, s.gender, s.dob, s.phone]),
-        styles: { font: 'helvetica', fontSize: 9 },
-        headStyles: { fillColor: [63, 81, 181], textColor: 255, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [245, 245, 255] },
+        head,
+        body,
+        ...TABLE_STYLES,
         columnStyles: { 0: { halign: 'center', cellWidth: 12 } },
     });
 
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setTextColor(150);
-        doc.text(`Trang ${i}/${pageCount}  |  Attendance AI`, doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 5, { align: 'center' });
-    }
-
-    doc.save(`danh_sach_hoc_sinh.pdf`);
+    addFooter(doc);
+    const fileSuffix = className ? `_${className.replace(/\s+/g, '_')}` : '';
+    doc.save(`danh_sach_hoc_sinh${fileSuffix}.pdf`);
 }
 
 /**
@@ -165,40 +169,34 @@ export function exportDailyAttendancePDF({ className, date, students, attendance
 
     doc.setFont('Roboto', 'bold');
     doc.setFontSize(14);
-    doc.text('BAO CAO DIEM DANH NGAY', doc.internal.pageSize.width / 2, 15, { align: 'center' });
+    doc.text('BÁO CÁO ĐIỂM DANH NGÀY', doc.internal.pageSize.width / 2, 15, { align: 'center' });
 
     doc.setFontSize(10);
     doc.setFont('Roboto', 'normal');
-    doc.text(`Lop: ${className}   |   Ngay: ${date}`, doc.internal.pageSize.width / 2, 22, { align: 'center' });
-
-    const tableBody = students.map((s, i) => [
-        i + 1,
-        s.id,
-        s.name,
-        STATUS_LABEL[attendanceMap[s.id]] || 'Chua xac dinh'
-    ]);
+    doc.text(`Lớp: ${className}   |   Ngày: ${date}`, doc.internal.pageSize.width / 2, 22, { align: 'center' });
 
     autoTable(doc, {
         startY: 28,
-        head: [['STT', 'Ma HS', 'Ho ten', 'Trang thai']],
-        body: tableBody,
-        styles: { font: 'helvetica', fontSize: 9 },
-        headStyles: { fillColor: [63, 81, 181], textColor: 255 },
+        head: [['STT', 'Mã HS', 'Họ tên', 'Trạng thái']],
+        body: students.map((s, i) => [i + 1, s.id, s.name, STATUS_LABEL[attendanceMap[s.id]] || 'Chưa xác định']),
+        ...TABLE_STYLES,
+        columnStyles: { 0: { halign: 'center', cellWidth: 12 } },
         didParseCell(data) {
             if (data.section === 'body' && data.column.index === 3) {
                 const val = data.cell.raw;
-                if (val === 'Co mat') data.cell.styles.textColor = [22, 163, 74];
-                else if (val === 'Vang') data.cell.styles.textColor = [220, 38, 38];
-                else if (val === 'Muon') data.cell.styles.textColor = [234, 88, 12];
+                if (val === 'Có mặt') data.cell.styles.textColor = [22, 163, 74];
+                else if (val === 'Vắng') data.cell.styles.textColor = [220, 38, 38];
+                else if (val === 'Muộn') data.cell.styles.textColor = [234, 88, 12];
             }
         }
     });
 
+    addFooter(doc);
     doc.save(`diemdanh_ngay_${className}_${date}.pdf`);
 }
 
 /**
- * Xuất báo cáo tổng hợp học kỳ (tỷ lệ vắng %)
+ * Xuất báo cáo tổng hợp học kỳ
  */
 export function exportSemesterReportPDF({ className, students, records }) {
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -206,11 +204,11 @@ export function exportSemesterReportPDF({ className, students, records }) {
 
     doc.setFont('Roboto', 'bold');
     doc.setFontSize(14);
-    doc.text('BAO CAO TONG HOP HOC KY', doc.internal.pageSize.width / 2, 15, { align: 'center' });
+    doc.text('BÁO CÁO TỔNG HỢP HỌC KỲ', doc.internal.pageSize.width / 2, 15, { align: 'center' });
 
     doc.setFontSize(10);
     doc.setFont('Roboto', 'normal');
-    doc.text(`Lop: ${className}   |   Hoc ky: 2 (2025-2026)`, doc.internal.pageSize.width / 2, 22, { align: 'center' });
+    doc.text(`Lớp: ${className}   |   Học kỳ: 2 (2025-2026)`, doc.internal.pageSize.width / 2, 22, { align: 'center' });
 
     const tableBody = students.map((s, i) => {
         const studentRecords = records.filter(r => r.studentId === s.id);
@@ -219,35 +217,25 @@ export function exportSemesterReportPDF({ className, students, records }) {
         const late = studentRecords.filter(r => r.status === 'late').length;
         const total = studentRecords.length || 1;
         const absentRate = Math.round((absent / total) * 100);
-
-        return [
-            i + 1,
-            s.id,
-            s.name,
-            total,
-            present,
-            absent,
-            late,
-            `${absentRate}%`
-        ];
+        return [i + 1, s.id, s.name, total, present, absent, late, `${absentRate}%`];
     });
 
     autoTable(doc, {
         startY: 28,
-        head: [['STT', 'Ma HS', 'Ho ten', 'Tong buoi', 'Co mat', 'Vang', 'Muon', '% Vang']],
+        head: [['STT', 'Mã HS', 'Họ tên', 'Tổng buổi', 'Có mặt', 'Vắng', 'Muộn', '% Vắng']],
         body: tableBody,
-        styles: { font: 'helvetica', fontSize: 9 },
-        headStyles: { fillColor: [63, 81, 181], textColor: 255 },
+        ...TABLE_STYLES,
         columnStyles: {
+            0: { halign: 'center', cellWidth: 12 },
             7: { fontStyle: 'bold', halign: 'center' }
         },
         didParseCell(data) {
             if (data.section === 'body' && data.column.index === 7) {
-                const val = parseInt(data.cell.raw);
-                if (val > 20) data.cell.styles.textColor = [220, 38, 38]; // Canh bao neu vang > 20%
+                if (parseInt(data.cell.raw) > 20) data.cell.styles.textColor = [220, 38, 38];
             }
         }
     });
 
+    addFooter(doc);
     doc.save(`tonghop_hocky_${className}.pdf`);
 }
