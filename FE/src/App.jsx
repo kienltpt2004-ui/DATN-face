@@ -10,6 +10,7 @@ import { Locations } from './pages/Locations';
 import { Attendance } from './pages/Attendance';
 import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
+import { Semesters } from './pages/Semesters';
 import { Login } from './pages/Login';
 
 const PAGE_COMPONENTS = {
@@ -21,6 +22,7 @@ const PAGE_COMPONENTS = {
     locations: Locations,
     attendance: Attendance,
     reports: Reports,
+    semesters: Semesters,
     settings: Settings,
 };
 

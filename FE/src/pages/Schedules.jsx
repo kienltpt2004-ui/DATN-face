@@ -9,11 +9,13 @@ export function Schedules({ user }) {
     const [classes, setClasses] = useState([]);
     const [teachers, setTeachers] = useState([]);
     const [locations, setLocations] = useState([]);
+    const [semesters, setSemesters] = useState([]);
+    const [semesterFilter, setSemesterFilter] = useState('');
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [editingSchedule, setEditingSchedule] = useState(null);
-    const [formData, setFormData] = useState({ id: '', subject: '', classId: '', teacherId: '', dayOfWeek: 'Thứ 2', startTime: '', endTime: '', room: '', locationId: '' });
+    const [formData, setFormData] = useState({ id: '', subject: '', classId: '', teacherId: '', dayOfWeek: 'Thứ 2', startTime: '', endTime: '', room: '', locationId: '', semesterId: '', sessionsCount: '' });
     const [showPicker, setShowPicker] = useState({ start: false, end: false });
 
     useEffect(() => {
@@ -23,14 +25,19 @@ export function Schedules({ user }) {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [schRes, clsRes, locRes] = await Promise.all([
+            const [schRes, clsRes, locRes, semRes] = await Promise.all([
                 api.get('/schedules'),
                 api.get('/classes'),
                 api.get('/locations'),
+                api.get('/semesters'),
             ]);
             setSchedulesList(schRes);
             setClasses(clsRes);
             setLocations(locRes);
+            setSemesters(semRes || []);
+            // Tự động chọn học kỳ đang active
+            const active = (semRes || []).find(s => s.isActive);
+            if (active) setSemesterFilter(String(active.id));
 
             // Chỉ admin mới có quyền lấy danh sách giáo viên
             if (!isTeacher) {
@@ -48,11 +55,14 @@ export function Schedules({ user }) {
         }
     };
 
-    const filtered = schedulesList.filter(s =>
-        (s.subject || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (s.classId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (!isTeacher && (s.teacherName || '').toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+    const filtered = schedulesList.filter(s => {
+        if (semesterFilter && String(s.semesterId) !== semesterFilter) return false;
+        return (
+            (s.subject || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (s.classId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (!isTeacher && (s.teacherName || '').toLowerCase().includes(searchTerm.toLowerCase()))
+        );
+    });
 
     const handleSave = async (e) => {
         e.preventDefault();
@@ -85,6 +95,12 @@ export function Schedules({ user }) {
         let conflictMsg = null;
         schedulesList.some(s => {
             if (editingSchedule && s.id === editingSchedule.id) return false;
+
+            // Chỉ kiểm tra xung đột trong cùng học kỳ
+            const dtoSem = formData.semesterId ? String(formData.semesterId) : null;
+            const sSem = s.semesterId ? String(s.semesterId) : null;
+            if (dtoSem && dtoSem !== sSem) return false;
+            if (!dtoSem && sSem) return false;
 
             const vnDay = {
                 'MONDAY': 'Thứ 2', 'TUESDAY': 'Thứ 3', 'WEDNESDAY': 'Thứ 4',
@@ -147,15 +163,29 @@ export function Schedules({ user }) {
     return (
         <div className="space-y-6 animate-fade-in">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="relative flex-1 max-w-md">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input
-                        type="text"
-                        placeholder={isTeacher ? "Tìm theo học phần..." : "Tìm theo học phần hoặc giáo viên..."}
-                        className="input pl-10"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+                <div className="flex flex-1 gap-3 flex-wrap">
+                    <div className="relative flex-1 min-w-[200px] max-w-sm">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <input
+                            type="text"
+                            placeholder={isTeacher ? "Tìm theo học phần..." : "Tìm theo học phần hoặc giáo viên..."}
+                            className="input pl-10"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    <select
+                        className="input min-w-[180px]"
+                        value={semesterFilter}
+                        onChange={e => setSemesterFilter(e.target.value)}
+                    >
+                        <option value="">Tất cả học kỳ</option>
+                        {semesters.map(s => (
+                            <option key={s.id} value={String(s.id)}>
+                                {s.name}{s.isActive ? ' ✓' : ''}
+                            </option>
+                        ))}
+                    </select>
                 </div>
                 {!isTeacher && (
                     <button
@@ -168,17 +198,20 @@ export function Schedules({ user }) {
                             const nextNum = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
                             const autoId = 'SCH-' + nextNum;
                             setEditingSchedule(null);
-                            setFormData({ 
+                            const activeSem = semesters.find(s => s.isActive);
+                            setFormData({
                                 id: autoId,
-                                subject: '', 
-                                classId: '', 
-                                teacherId: teachers[0]?.id || '', 
-                                dayOfWeek: 'Thứ 2', 
-                                startTime: '', 
-                                endTime: '', 
+                                subject: '',
+                                classId: '',
+                                teacherId: teachers[0]?.id || '',
+                                dayOfWeek: 'Thứ 2',
+                                startTime: '',
+                                endTime: '',
                                 room: '',
-                                locationId: locations[0]?.id || '' 
-                            }); 
+                                locationId: locations[0]?.id || '',
+                                semesterId: activeSem ? activeSem.id : null,
+                                sessionsCount: '',
+                            });
                             setShowModal(true); 
                         }}
                     >
@@ -255,12 +288,19 @@ export function Schedules({ user }) {
                                                     </div>
                                                 )}
                                             </div>
-                                            {!isTeacher && (
-                                                <div className="flex items-center gap-2 text-xs text-gray-400 font-medium">
-                                                    <Users size={12} />
-                                                    GV: {sch.teacherName}
-                                                </div>
-                                            )}
+                                            <div className="flex items-center justify-between">
+                                                {!isTeacher && (
+                                                    <div className="flex items-center gap-2 text-xs text-gray-400 font-medium">
+                                                        <Users size={12} />
+                                                        GV: {sch.teacherName}
+                                                    </div>
+                                                )}
+                                                {sch.sessionsCount > 0 && (
+                                                    <span className="ml-auto text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                                                        {sch.sessionsCount} buổi
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -366,6 +406,31 @@ export function Schedules({ user }) {
                                         <option value="">-- Chọn vị trí --</option>
                                         {locations.map(l => <option key={l.id} value={l.id}>{l.name} ({l.address})</option>)}
                                     </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-600 mb-2">Học kỳ</label>
+                                    <select className="input" value={formData.semesterId || ''} onChange={e => setFormData({ ...formData, semesterId: e.target.value ? Number(e.target.value) : null })}>
+                                        <option value="">-- Không thuộc kỳ nào --</option>
+                                        {semesters.map(s => (
+                                            <option key={s.id} value={s.id}>{s.name}{s.isActive ? ' (đang hoạt động)' : ''}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-600 mb-2">
+                                        Số buổi phụ trách
+                        
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        placeholder="VD: 15"
+                                        className="input"
+                                        value={formData.sessionsCount || ''}
+                                        onChange={e => setFormData({ ...formData, sessionsCount: e.target.value ? Number(e.target.value) : null })}
+                                    />
                                 </div>
 
                                 <div>

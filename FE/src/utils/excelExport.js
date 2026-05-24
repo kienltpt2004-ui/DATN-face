@@ -45,30 +45,35 @@ export function exportDailyAttendanceExcel({ className, date, students, attendan
 /**
  * Xuất báo cáo tổng hợp học kỳ ra Excel
  */
-export function exportSemesterReportExcel({ className, students, records }) {
-    const data = students.map((s, i) => {
-        const studentRecords = records.filter(r => r.studentId === s.id);
-        const present = studentRecords.filter(r => r.status === 'present').length;
-        const absent = studentRecords.filter(r => r.status === 'absent').length;
-        const late = studentRecords.filter(r => r.status === 'late').length;
-        const total = studentRecords.length || 0;
-        const attendanceRate = total > 0 ? Math.round(((present + late) / total) * 100) : 0;
-
-        return {
-            'STT': i + 1,
-            'Mã học sinh': s.id,
-            'Họ và tên': s.name,
-            'Tổng buổi học': total,
-            'Số buổi có mặt': present,
-            'Số buổi vắng': absent,
-            'Số buổi muộn': late,
-            'Tỷ lệ chuyên cần (%)': `${attendanceRate}%`
-        };
+export function exportSemesterReportExcel({ className, semesterName, totalSessions, students, records, summary }) {
+    const rows = summary || students.map(s => {
+        const sr = records.filter(r => r.studentId === s.id);
+        const present = sr.filter(r => r.status === 'present').length;
+        const absent = sr.filter(r => r.status === 'absent').length;
+        const late = sr.filter(r => r.status === 'late').length;
+        const half = sr.filter(r => r.status === 'half').length;
+        const score = present + late + (half * 0.5);
+        const rate = totalSessions ? Math.round((score / totalSessions) * 100) : 0;
+        return { ...s, present, absent, late, half, rate };
     });
+
+    const data = rows.map((s, i) => ({
+        'STT': i + 1,
+        'Mã học sinh': s.id,
+        'Họ và tên': s.name,
+        'Có mặt': s.present,
+        'Vắng': s.absent,
+        'Muộn': s.late,
+        'Nửa buổi': s.half,
+        'Tổng buổi': totalSessions || s.total || 0,
+        'Tỉ lệ (%)': `${s.rate}%`,
+        'Kết quả': s.rate >= 100 ? 'CHUYÊN CẦN' : s.rate < 70 ? 'CẤM THI' : s.rate < 80 ? 'CẢNH BÁO' : 'ĐẠT',
+    }));
 
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Tổng hợp học kỳ");
+    const sheetName = semesterName ? semesterName.slice(0, 31) : 'Tổng hợp học kỳ';
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
     ws['!cols'] = getAutoColumnWidths(data);
 

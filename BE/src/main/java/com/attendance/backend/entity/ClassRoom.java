@@ -21,18 +21,26 @@ public class ClassRoom {
     @Column(name = "max_students", nullable = false)
     private Integer maxStudents = 50;
 
+    @Column(name = "total_sessions")
+    private Integer totalSessions;
+
     public ClassRoom() {
     }
 
     public ClassRoom(String id, String name, String description) {
-        this(id, name, description, 50);
+        this(id, name, description, 50, null);
     }
 
     public ClassRoom(String id, String name, String description, Integer maxStudents) {
+        this(id, name, description, maxStudents, null);
+    }
+
+    public ClassRoom(String id, String name, String description, Integer maxStudents, Integer totalSessions) {
         this.id = id;
         this.name = name;
         this.description = description;
         this.maxStudents = maxStudents != null ? maxStudents : 50;
+        this.totalSessions = totalSessions;
     }
 
     public static ClassRoomBuilder builder() {
@@ -71,11 +79,20 @@ public class ClassRoom {
         this.maxStudents = (maxStudents != null && maxStudents > 0) ? maxStudents : 50;
     }
 
+    public Integer getTotalSessions() {
+        return totalSessions;
+    }
+
+    public void setTotalSessions(Integer totalSessions) {
+        this.totalSessions = totalSessions;
+    }
+
     public static class ClassRoomBuilder {
         private String id;
         private String name;
         private String description;
         private Integer maxStudents = 50;
+        private Integer totalSessions;
 
         ClassRoomBuilder() {
         }
@@ -100,8 +117,13 @@ public class ClassRoom {
             return this;
         }
 
+        public ClassRoomBuilder totalSessions(Integer totalSessions) {
+            this.totalSessions = totalSessions;
+            return this;
+        }
+
         public ClassRoom build() {
-            return new ClassRoom(id, name, description, maxStudents);
+            return new ClassRoom(id, name, description, maxStudents, totalSessions);
         }
     }
 }

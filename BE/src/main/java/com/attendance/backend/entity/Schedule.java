@@ -46,6 +46,13 @@ public class Schedule {
     @Column(name = "location_id", length = 20)
     private String locationId;
 
+    @Column(name = "semester_id")
+    private Long semesterId;
+
+    /** Số buổi mà giáo viên này phụ trách trong môn học */
+    @Column(name = "sessions_count")
+    private Integer sessionsCount;
+
     public String getId() {
         return id;
     }
@@ -126,6 +133,22 @@ public class Schedule {
         this.locationId = locationId;
     }
 
+    public Long getSemesterId() {
+        return semesterId;
+    }
+
+    public void setSemesterId(Long semesterId) {
+        this.semesterId = semesterId;
+    }
+
+    public Integer getSessionsCount() {
+        return sessionsCount;
+    }
+
+    public void setSessionsCount(Integer sessionsCount) {
+        this.sessionsCount = sessionsCount;
+    }
+
     public Schedule() {
     }
 
@@ -157,6 +180,8 @@ public class Schedule {
         private String endTime;
         private String room;
         private String locationId;
+        private Long semesterId;
+        private Integer sessionsCount;
 
         ScheduleBuilder() {
         }
@@ -211,8 +236,21 @@ public class Schedule {
             return this;
         }
 
+        public ScheduleBuilder semesterId(Long semesterId) {
+            this.semesterId = semesterId;
+            return this;
+        }
+
+        public ScheduleBuilder sessionsCount(Integer sessionsCount) {
+            this.sessionsCount = sessionsCount;
+            return this;
+        }
+
         public Schedule build() {
-            return new Schedule(id, classId, subject, teacherId, teacherName, dayOfWeek, startTime, endTime, room, locationId);
+            Schedule s = new Schedule(id, classId, subject, teacherId, teacherName, dayOfWeek, startTime, endTime, room, locationId);
+            s.setSemesterId(semesterId);
+            s.setSessionsCount(sessionsCount);
+            return s;
         }
     }
 }

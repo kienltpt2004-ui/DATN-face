@@ -78,6 +78,8 @@ public class ScheduleService {
         schedule.setEndTime(dto.getEndTime());
         schedule.setRoom(dto.getRoom());
         schedule.setLocationId(dto.getLocationId());
+        schedule.setSemesterId(dto.getSemesterId());
+        schedule.setSessionsCount(dto.getSessionsCount());
         return toDTO(scheduleRepository.save(schedule));
     }
 
@@ -121,9 +123,16 @@ public class ScheduleService {
 
         List<Schedule> allSchedules = scheduleRepository.findAll();
         String normalizedRoom = dto.getRoom() != null ? dto.getRoom().replaceAll("\\s+", "").toUpperCase() : "";
-        
+
         for (Schedule s : allSchedules) {
             if (s.getId().equals(excludeId) || s.getId().equals(dto.getId())) continue;
+
+            // Chỉ kiểm tra xung đột trong cùng học kỳ
+            Long dtoSem = dto.getSemesterId();
+            Long sSem = s.getSemesterId();
+            if (dtoSem != null && !dtoSem.equals(sSem)) continue;
+            if (dtoSem == null && sSem != null) continue;
+
             if (getDayValue(s.getDayOfWeek()) != dayVal) continue;
 
             java.time.LocalTime sStart, sEnd;
@@ -202,6 +211,8 @@ public class ScheduleService {
                 .endTime(s.getEndTime())
                 .room(s.getRoom())
                 .locationId(s.getLocationId())
+                .semesterId(s.getSemesterId())
+                .sessionsCount(s.getSessionsCount())
                 .build();
     }
 
@@ -217,6 +228,8 @@ public class ScheduleService {
                 .endTime(dto.getEndTime())
                 .room(dto.getRoom())
                 .locationId(dto.getLocationId())
+                .semesterId(dto.getSemesterId())
+                .sessionsCount(dto.getSessionsCount())
                 .build();
     }
 }

@@ -85,6 +85,22 @@ public class AttendanceController {
     }
 
     /**
+     * GET /api/attendance/class/{classId}/combined-report?from=...&to=...
+     * Báo cáo tổng hợp toàn lớp — trả về TẤT CẢ bản ghi (không lọc theo giáo viên).
+     * Dùng khi lớp có nhiều giáo viên; FE tự phân tách theo scheduleId.
+     */
+    @GetMapping("/class/{classId}/combined-report")
+    @PreAuthorize("hasAnyRole('ADMIN','TEACHER')")
+    public ResponseEntity<List<AttendanceRecordDTO>> getCombinedReport(
+            @PathVariable String classId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            org.springframework.security.core.Authentication authentication) {
+        checkAccess(classId, authentication);
+        return ResponseEntity.ok(attendanceService.getByClassAndDateRange(classId, from, to));
+    }
+
+    /**
      * POST /api/attendance/bulk
      * Điểm danh hàng loạt cho cả lớp
      */

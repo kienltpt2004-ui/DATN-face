@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../utils/api';
-import { Check, X, Save, ShieldAlert, FileText, FileSpreadsheet, Clock, ScanFace, Lock } from 'lucide-react';
+import { Check, X, Save, ShieldAlert, FileText, FileSpreadsheet, Clock, ScanFace, Lock, BarChart2, Calendar } from 'lucide-react';
 import { exportDailyAttendancePDF } from '../utils/pdfExport';
 import { exportDailyAttendanceExcel } from '../utils/excelExport';
 
@@ -22,7 +22,13 @@ function StatusButton({ status, current, onClick, disabled }) {
 }
 
 export function Attendance({ user }) {
+    const [viewMode, setViewMode]             = useState('daily'); // 'daily' | 'semester'
     const [classes, setClasses]               = useState([]);
+    const [allClasses, setAllClasses]         = useState([]);
+    const [semesters, setSemesters]           = useState([]);
+    const [selectedSemester, setSelectedSemester] = useState('');
+    const [semesterStats, setSemesterStats]   = useState([]);
+    const [semesterLoading, setSemesterLoading] = useState(false);
     const [selectedClass, setSelectedClass]   = useState('');
     const [selectedDate, setSelectedDate]     = useState(todayStr);
     const [classStudents, setClassStudents]   = useState([]);
@@ -53,15 +59,77 @@ export function Attendance({ user }) {
     // Dọn dẹp timer khi component unmount
     useEffect(() => () => { if (endTimerRef.current) clearTimeout(endTimerRef.current); }, []);
 
+    const loadSemesterStats = async (semId) => {
+        if (!semId) return;
+        const sem = semesters.find(s => String(s.id) === String(semId));
+        if (!sem) return;
+        setSemesterLoading(true);
+        setSemesterStats([]);
+        try {
+            // Lấy tất cả lịch dạy thuộc học kỳ này
+            const [schedulesRes, studentsAllRes] = await Promise.all([
+                api.get('/schedules'),
+                api.get('/students'),
+            ]);
+            const semSchedules = schedulesRes.filter(s => String(s.semesterId) === String(semId));
+            const classIds = [...new Set(semSchedules.map(s => s.classId))];
+
+            const stats = await Promise.all(classIds.map(async (classId) => {
+                const cls = allClasses.find(c => c.id === classId);
+                const totalSessions = cls?.totalSessions || null;
+
+                // Lấy tất cả bản ghi điểm danh của lớp trong khoảng thời gian học kỳ
+                const records = await api.get(
+                    `/attendance/class/${classId}/report?from=${sem.startDate}&to=${sem.endDate}`
+                ).catch(() => []);
+
+                // Nhóm theo sinh viên
+                const students = studentsAllRes.filter(sv =>
+                    records.some(r => r.studentId === sv.id)
+                );
+
+                const studentStats = students.map(sv => {
+                    const svRecords = records.filter(r => r.studentId === sv.id);
+                    const present = svRecords.filter(r => ['present','late'].includes(r.status?.toLowerCase())).length;
+                    const half    = svRecords.filter(r => r.status?.toLowerCase() === 'half').length;
+                    const attended = present + half * 0.5;
+                    const total    = totalSessions || svRecords.length;
+                    const pct      = total > 0 ? Math.round((attended / total) * 100) : null;
+                    return { ...sv, attended, total, pct, eligible: pct !== null ? pct >= 70 : null };
+                });
+
+                return { classId, className: cls?.name || classId, totalSessions, studentStats };
+            }));
+
+            setSemesterStats(stats);
+        } catch (e) {
+            console.error('Lỗi tải thống kê học kỳ:', e);
+        } finally {
+            setSemesterLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (viewMode === 'semester' && selectedSemester && semesters.length > 0 && allClasses.length > 0)
+            loadSemesterStats(selectedSemester);
+    }, [viewMode, selectedSemester, semesters, allClasses]);
+
     const isHistory = selectedDate !== todayStr;
     const canEdit   = !isHistory && !classEnded;
 
     useEffect(() => {
         const fetchClasses = async () => {
             try {
-                const res = await api.get('/classes');
-                setClasses(res.map(c => c.id));
-                if (res.length > 0) setSelectedClass(res[0].id);
+                const [clsRes, semRes] = await Promise.all([
+                    api.get('/classes'),
+                    api.get('/semesters'),
+                ]);
+                setAllClasses(clsRes);
+                setClasses(clsRes.map(c => c.id));
+                if (clsRes.length > 0) setSelectedClass(clsRes[0].id);
+                setSemesters(semRes || []);
+                const active = (semRes || []).find(s => s.isActive);
+                if (active) setSelectedSemester(String(active.id));
             } catch (err) {
                 console.error('Failed to fetch classes:', err);
             }
@@ -252,6 +320,125 @@ export function Attendance({ user }) {
 
     return (
         <div className="space-y-5 animate-fade-in">
+            {/* View mode toggle */}
+            <div className="flex gap-2 p-1 bg-gray-100 rounded-2xl w-fit">
+                <button
+                    onClick={() => setViewMode('daily')}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${viewMode === 'daily' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    <Clock size={15} /> Điểm danh theo ngày
+                </button>
+                <button
+                    onClick={() => setViewMode('semester')}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${viewMode === 'semester' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    <BarChart2 size={15} /> Tổng hợp theo học kỳ
+                </button>
+            </div>
+
+            {/* ===== CHẾ ĐỘ TỔNG HỢP HỌC KỲ ===== */}
+            {viewMode === 'semester' && (
+                <div className="space-y-5">
+                    <div className="card">
+                        <div className="flex flex-wrap items-end gap-4">
+                            <div className="flex-1 min-w-[200px]">
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2 tracking-wider">Chọn học kỳ</label>
+                                <select className="input" value={selectedSemester} onChange={e => setSelectedSemester(e.target.value)}>
+                                    <option value="">-- Chọn học kỳ --</option>
+                                    {semesters.map(s => (
+                                        <option key={s.id} value={String(s.id)}>{s.name}{s.isActive ? ' (đang hoạt động)' : ''}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <p className="text-xs text-gray-400">
+                                Ngưỡng đủ điều kiện thi: <b className="text-indigo-600">≥ 70%</b>
+                            </p>
+                        </div>
+                    </div>
+
+                    {semesterLoading && (
+                        <div className="flex items-center justify-center py-20 text-gray-400">
+                            <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mr-3" />
+                            Đang tải thống kê...
+                        </div>
+                    )}
+
+                    {!semesterLoading && semesterStats.map(cls => (
+                        <div key={cls.classId} className="card p-0 overflow-hidden shadow-sm border border-gray-100">
+                            <div className="p-5 border-b border-gray-50 bg-white flex items-center justify-between">
+                                <div>
+                                    <h3 className="font-bold text-gray-800">{cls.className} <span className="text-gray-400 font-mono text-sm">({cls.classId})</span></h3>
+                                    <p className="text-xs text-gray-400 mt-0.5">
+                                        Tổng số buổi học: <b className="text-indigo-600">{cls.totalSessions ?? <span className="text-orange-500">Chưa thiết lập</span>}</b>
+                                    </p>
+                                </div>
+                                <div className="text-right text-xs text-gray-400">
+                                    {cls.studentStats.filter(s => s.eligible === true).length} / {cls.studentStats.length} sv đủ điều kiện thi
+                                </div>
+                            </div>
+                            <div className="overflow-x-auto max-h-[400px]">
+                                <table className="w-full text-sm">
+                                    <thead className="sticky top-0 bg-slate-50 border-b border-gray-100 text-gray-400 text-[10px] font-bold uppercase tracking-widest">
+                                        <tr>
+                                            <th className="px-5 py-3 text-left">Sinh viên</th>
+                                            <th className="px-5 py-3 text-center">Số buổi tham dự</th>
+                                            <th className="px-5 py-3 text-center">Tổng buổi</th>
+                                            <th className="px-5 py-3 text-center">Chuyên cần</th>
+                                            <th className="px-5 py-3 text-center">Điều kiện thi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50 bg-white">
+                                        {cls.studentStats.length === 0 ? (
+                                            <tr><td colSpan={5} className="px-5 py-10 text-center text-gray-400">Chưa có dữ liệu điểm danh</td></tr>
+                                        ) : cls.studentStats.map(sv => (
+                                            <tr key={sv.id} className="hover:bg-slate-50/50 transition-colors">
+                                                <td className="px-5 py-3">
+                                                    <p className="font-bold text-gray-700">{sv.name}</p>
+                                                    <p className="text-[11px] text-gray-400 font-mono">{sv.id}</p>
+                                                </td>
+                                                <td className="px-5 py-3 text-center font-bold text-gray-700">{sv.attended}</td>
+                                                <td className="px-5 py-3 text-center text-gray-500">{sv.total}</td>
+                                                <td className="px-5 py-3 text-center">
+                                                    {sv.pct !== null ? (
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <div className="w-24 h-2 rounded-full bg-gray-100 overflow-hidden">
+                                                                <div
+                                                                    className={`h-full rounded-full ${sv.pct >= 70 ? 'bg-emerald-500' : sv.pct >= 50 ? 'bg-orange-400' : 'bg-red-500'}`}
+                                                                    style={{ width: `${Math.min(sv.pct, 100)}%` }}
+                                                                />
+                                                            </div>
+                                                            <span className={`text-xs font-bold ${sv.pct >= 70 ? 'text-emerald-600' : sv.pct >= 50 ? 'text-orange-600' : 'text-red-600'}`}>
+                                                                {sv.pct}%
+                                                            </span>
+                                                        </div>
+                                                    ) : '—'}
+                                                </td>
+                                                <td className="px-5 py-3 text-center">
+                                                    {sv.eligible === true  && <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-50 text-emerald-600 border border-emerald-100">ĐỦ ĐIỀU KIỆN</span>}
+                                                    {sv.eligible === false && <span className="px-2 py-0.5 rounded text-[10px] font-black bg-red-50 text-red-600 border border-red-100">KHÔNG ĐỦ</span>}
+                                                    {sv.eligible === null  && <span className="text-gray-300 text-[10px]">—</span>}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    ))}
+
+                    {!semesterLoading && semesterStats.length === 0 && selectedSemester && (
+                        <div className="card text-center py-16 text-gray-400 border-dashed border-2 bg-transparent">
+                            <Calendar size={40} className="mx-auto mb-3 opacity-10" />
+                            <p className="font-medium">Chưa có lịch dạy nào gắn với học kỳ này.</p>
+                            <p className="text-xs mt-1">Vào trang Lịch dạy → chọn học kỳ khi tạo lịch.</p>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ===== CHẾ ĐỘ ĐIỂM DANH THEO NGÀY ===== */}
+            {viewMode === 'daily' && <>
+
             {isHistory && (
                 <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-center gap-3 text-amber-700">
                     <ShieldAlert size={20} />
@@ -385,9 +572,9 @@ export function Attendance({ user }) {
                             </div>
                         </div>
 
-                        {/* Nút xuất file — hiện khi đã lưu (dù là lưu tay hay tự động) */}
-                        {saved
-                            ? <div className="flex items-center gap-2">
+                        {/* Nút xuất file — hiện khi đã lưu */}
+                        {saved && (
+                            <div className="flex items-center gap-2">
                                 <span className="flex items-center gap-1 text-emerald-600 text-sm font-medium mr-2 animate-fade-in">
                                     <Check size={15} strokeWidth={3} /> Đã lưu thành công
                                 </span>
@@ -399,14 +586,8 @@ export function Attendance({ user }) {
                                     onClick={() => exportDailyAttendanceExcel({ className: selectedClass, date: selectedDate, students: classStudents, attendanceMap: attendance })}>
                                     <FileSpreadsheet size={14} /> Xuất Excel
                                 </button>
-                              </div>
-                            : <button
-                                className={`btn-primary py-2 px-6 shadow-lg shadow-indigo-100 ${(!canEdit || loading) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                onClick={(canEdit && !loading) ? handleSave : null}
-                                disabled={!canEdit || loading}>
-                                <Save size={16} /> Lưu kết quả
-                              </button>
-                        }
+                            </div>
+                        )}
                     </div>
 
                     <div className="overflow-y-auto max-h-[600px]">
@@ -435,11 +616,11 @@ export function Attendance({ user }) {
                                         </td>
                                         <td className="px-5 py-4">
                                             <div className="flex flex-col items-center gap-2">
-                                                {attendanceMeta[s.id]?.method === 'face_id' && (
+                                                {attendanceMeta[s.id]?.method === 'face_id' ? (
                                                     <div className="flex items-center gap-2 flex-wrap justify-center">
                                                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-violet-50 border border-violet-200 text-violet-700 text-[11px] font-semibold">
                                                             <ScanFace size={12} />
-                                                            Đã điểm danh bằng khuôn mặt
+                                                            Nhận diện khuôn mặt
                                                         </span>
                                                         {attendanceMeta[s.id]?.checkInTime && (
                                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[11px] font-medium">
@@ -450,6 +631,18 @@ export function Attendance({ user }) {
                                                         {attendanceMeta[s.id]?.note && (
                                                             <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[11px] font-medium border border-amber-200">
                                                                 {attendanceMeta[s.id].note}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ) : attendanceMeta[s.id]?.method != null && (
+                                                    <div className="flex items-center gap-2 flex-wrap justify-center">
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-100 border border-gray-200 text-gray-500 text-[11px] font-semibold">
+                                                            Điểm danh thủ công
+                                                        </span>
+                                                        {attendanceMeta[s.id]?.checkInTime && (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[11px] font-medium">
+                                                                <Clock size={10} />
+                                                                {attendanceMeta[s.id].checkInTime.substring(0, 5)}
                                                             </span>
                                                         )}
                                                     </div>
@@ -476,6 +669,7 @@ export function Attendance({ user }) {
                     </div>
                 </div>
             </div>
+            </>}
         </div>
     );
 }

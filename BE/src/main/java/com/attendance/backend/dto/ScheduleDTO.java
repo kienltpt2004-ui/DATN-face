@@ -11,6 +11,8 @@ public class ScheduleDTO {
     private String endTime;
     private String room;
     private String locationId;
+    private Long semesterId;
+    private Integer sessionsCount;
 
     public ScheduleDTO() {
     }
@@ -112,6 +114,22 @@ public class ScheduleDTO {
         this.locationId = locationId;
     }
 
+    public Long getSemesterId() {
+        return semesterId;
+    }
+
+    public void setSemesterId(Long semesterId) {
+        this.semesterId = semesterId;
+    }
+
+    public Integer getSessionsCount() {
+        return sessionsCount;
+    }
+
+    public void setSessionsCount(Integer sessionsCount) {
+        this.sessionsCount = sessionsCount;
+    }
+
     public static class ScheduleDTOBuilder {
         private String id;
         private String classId;
@@ -123,6 +141,8 @@ public class ScheduleDTO {
         private String endTime;
         private String room;
         private String locationId;
+        private Long semesterId;
+        private Integer sessionsCount;
 
         ScheduleDTOBuilder() {
         }
@@ -177,8 +197,21 @@ public class ScheduleDTO {
             return this;
         }
 
+        public ScheduleDTOBuilder semesterId(Long semesterId) {
+            this.semesterId = semesterId;
+            return this;
+        }
+
+        public ScheduleDTOBuilder sessionsCount(Integer sessionsCount) {
+            this.sessionsCount = sessionsCount;
+            return this;
+        }
+
         public ScheduleDTO build() {
-            return new ScheduleDTO(id, classId, subject, teacherId, teacherName, dayOfWeek, startTime, endTime, room, locationId);
+            ScheduleDTO dto = new ScheduleDTO(id, classId, subject, teacherId, teacherName, dayOfWeek, startTime, endTime, room, locationId);
+            dto.setSemesterId(semesterId);
+            dto.setSessionsCount(sessionsCount);
+            return dto;
         }
     }
 }

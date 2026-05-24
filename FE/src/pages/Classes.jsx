@@ -13,7 +13,7 @@ export function Classes() {
     const [showEnrollmentModal, setShowEnrollmentModal] = useState(null);
     const [showDesc, setShowDesc] = useState(null);
     const [editingClass, setEditingClass] = useState(null);
-    const [formData, setFormData] = useState({ name: '', id: '', description: '', maxStudents: 50 });
+    const [formData, setFormData] = useState({ name: '', id: '', description: '', maxStudents: 50, totalSessions: '' });
 
     useEffect(() => {
         fetchData();
@@ -64,7 +64,8 @@ export function Classes() {
             id: formData.id,
             name: formData.name,
             description: formData.description,
-            maxStudents: formData.maxStudents
+            maxStudents: formData.maxStudents,
+            totalSessions: formData.totalSessions ? parseInt(formData.totalSessions) : null,
         };
 
         try {
@@ -116,11 +117,12 @@ export function Classes() {
 
     const openEdit = (cls) => {
         setEditingClass(cls);
-        setFormData({ 
-            name: cls.name, 
-            id: cls.id, 
-            description: cls.description || '', 
-            maxStudents: cls.maxStudents || 50
+        setFormData({
+            name: cls.name,
+            id: cls.id,
+            description: cls.description || '',
+            maxStudents: cls.maxStudents || 50,
+            totalSessions: cls.totalSessions || '',
         });
         setShowModal(true);
     };
@@ -145,7 +147,7 @@ export function Classes() {
                     </label>
                     <button
                         className="btn-primary flex items-center gap-2 whitespace-nowrap"
-                        onClick={() => { setEditingClass(null); setFormData({ name: '', id: '', description: '', maxStudents: 50 }); setShowModal(true); }}
+                        onClick={() => { setEditingClass(null); setFormData({ name: '', id: '', description: '', maxStudents: 50, totalSessions: '' }); setShowModal(true); }}
                     >
                         <Plus size={18} /> Thêm môn học mới
                     </button>
@@ -175,6 +177,12 @@ export function Classes() {
                             <p className="text-xs text-gray-400 font-mono tracking-wider uppercase">{cls.id}</p>
                         </div>
                         <div className="space-y-3 pt-4 border-t border-gray-50">
+                            {cls.totalSessions && (
+                                <div className="flex items-center justify-between text-sm">
+                                    <span className="text-gray-500 flex items-center gap-2"><BookOpen size={14} /> Tổng số buổi:</span>
+                                    <span className="font-bold text-indigo-600">{cls.totalSessions} buổi</span>
+                                </div>
+                            )}
                             <div className="flex items-center justify-between text-sm">
                                 <span className="text-gray-500 flex items-center gap-2"><Users size={14} /> Sĩ số:</span>
                                 <div className="flex flex-col items-end gap-1">
@@ -239,9 +247,13 @@ export function Classes() {
                                         <input type="number" required className="input" value={formData.maxStudents} onChange={e => setFormData({ ...formData, maxStudents: parseInt(e.target.value) })} />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-600 mb-2">Mô tả</label>
-                                        <input className="input" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
+                                        <label className="block text-sm font-bold text-gray-600 mb-2">Tổng số buổi học</label>
+                                        <input type="number" min="1" placeholder="VD: 30" className="input" value={formData.totalSessions} onChange={e => setFormData({ ...formData, totalSessions: e.target.value })} />
                                     </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-600 mb-2">Mô tả</label>
+                                    <input className="input" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
                                 </div>
 
                             </div>

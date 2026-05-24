@@ -123,6 +123,7 @@ public class ClassRoomService {
         existing.setName(updated.getName());
         existing.setDescription(updated.getDescription());
         existing.setMaxStudents(updated.getMaxStudents());
+        existing.setTotalSessions(updated.getTotalSessions());
         return classRoomRepository.save(existing);
     }
 

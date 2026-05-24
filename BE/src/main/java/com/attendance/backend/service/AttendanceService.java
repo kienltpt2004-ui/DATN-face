@@ -33,17 +33,20 @@ public class AttendanceService {
     private final com.attendance.backend.repository.ScheduleRepository scheduleRepository;
     private final com.attendance.backend.repository.LocationRepository locationRepository;
     private final FaceRecognitionService faceRecognitionService;
+    private final com.attendance.backend.repository.SemesterRepository semesterRepository;
 
-    public AttendanceService(AttendanceRecordRepository attendanceRepo, 
+    public AttendanceService(AttendanceRecordRepository attendanceRepo,
                             StudentRepository studentRepository,
                             com.attendance.backend.repository.ScheduleRepository scheduleRepository,
                             com.attendance.backend.repository.LocationRepository locationRepository,
-                            FaceRecognitionService faceRecognitionService) {
+                            FaceRecognitionService faceRecognitionService,
+                            com.attendance.backend.repository.SemesterRepository semesterRepository) {
         this.attendanceRepo = attendanceRepo;
         this.studentRepository = studentRepository;
         this.scheduleRepository = scheduleRepository;
         this.locationRepository = locationRepository;
         this.faceRecognitionService = faceRecognitionService;
+        this.semesterRepository = semesterRepository;
     }
 
     /** Lấy danh sách điểm danh theo lớp và ngày */
@@ -90,11 +93,21 @@ public class AttendanceService {
     @Transactional
     public List<AttendanceRecordDTO> bulkSave(BulkAttendanceRequest request) {
         LocalDate date = LocalDate.parse(request.getDate());
-        
+
         java.time.ZoneId zoneId = java.time.ZoneId.of("Asia/Ho_Chi_Minh");
         if (!date.equals(LocalDate.now(zoneId))) {
             throw new RuntimeException("Chỉ được phép điểm danh cho ngày hôm nay (" + LocalDate.now(zoneId) + ")");
         }
+
+        // Kiểm tra học kỳ còn hiệu lực không
+        semesterRepository.findByIsActiveTrue().ifPresent(semester -> {
+            if (date.isAfter(semester.getEndDate())) {
+                throw new RuntimeException("Học kỳ \"" + semester.getName() + "\" đã kết thúc ngày " + semester.getEndDate() + ". Không thể điểm danh.");
+            }
+            if (date.isBefore(semester.getStartDate())) {
+                throw new RuntimeException("Học kỳ \"" + semester.getName() + "\" chưa bắt đầu (từ " + semester.getStartDate() + "). Không thể điểm danh.");
+            }
+        });
 
         // Ràng buộc 2: Chỉ được điểm danh vào những ngày có lịch dạy
         String dayOfWeekStr = getVietnameseDayOfWeek(date.getDayOfWeek().getValue());
@@ -150,16 +163,21 @@ public class AttendanceService {
                 throw new RuntimeException("Sinh viên " + studentId + " không thuộc học phần " + request.getClassId());
             }
 
+            // Bảo toàn bản ghi FACE_ID bất kể scheduleId trong request (tránh race condition khi GV lưu trước khi SV quét mặt)
+            java.util.Optional<AttendanceRecord> existingFaceRecord = attendanceRepo
+                    .findByStudentIdAndDate(studentId, date).stream()
+                    .filter(r -> r.getClassId().equalsIgnoreCase(request.getClassId())
+                                 && r.getMethod() == AttendanceRecord.Method.FACE_ID)
+                    .findFirst();
+            if (existingFaceRecord.isPresent()) {
+                saved.add(existingFaceRecord.get());
+                return;
+            }
+
             // Upsert: nếu đã có thì cập nhật (dựa trên student, date, class và schedule)
             AttendanceRecord record = attendanceRepo
                     .findByStudentIdAndDateAndClassIdAndScheduleId(studentId, date, request.getClassId(), request.getScheduleId())
                     .orElse(null);
-
-            // Bảo toàn bản ghi điểm danh bằng khuôn mặt — không cho phép bulk save ghi đè
-            if (record != null && record.getMethod() == AttendanceRecord.Method.FACE_ID) {
-                saved.add(record);
-                return;
-            }
 
             if (record == null) {
                 record = AttendanceRecord.builder()
@@ -411,7 +429,20 @@ public class AttendanceService {
         LocalDate today = LocalDate.now(zoneId);
         String dayOfWeekStr = getVietnameseDayOfWeek(today.getDayOfWeek().getValue());
         LocalTime now = LocalTime.now(zoneId);
-        
+
+        // Kiểm tra học kỳ còn hiệu lực không
+        com.attendance.backend.entity.Semester activeSemester = semesterRepository.findByIsActiveTrue().orElse(null);
+        if (activeSemester != null) {
+            if (today.isAfter(activeSemester.getEndDate())) {
+                logger.info("[DEBUG] Học kỳ '{}' đã kết thúc ({}), không hiện lịch điểm danh.", activeSemester.getName(), activeSemester.getEndDate());
+                return List.of();
+            }
+            if (today.isBefore(activeSemester.getStartDate())) {
+                logger.info("[DEBUG] Học kỳ '{}' chưa bắt đầu ({}), không hiện lịch điểm danh.", activeSemester.getName(), activeSemester.getStartDate());
+                return List.of();
+            }
+        }
+
         logger.info("[DEBUG] Lớp của SV: {} | Hôm nay: {} | Thứ: {} | Giờ hiện tại: {}", classIds, today, dayOfWeekStr, now);
 
         if (classIds.isEmpty()) {

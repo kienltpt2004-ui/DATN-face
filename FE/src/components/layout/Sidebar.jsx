@@ -8,7 +8,8 @@ import {
     LogOut,
     BookOpen,
     Calendar,
-    MapPin
+    MapPin,
+    CalendarDays
 } from 'lucide-react';
 
 const ALL_MENU_ITEMS = [
@@ -16,6 +17,7 @@ const ALL_MENU_ITEMS = [
     { id: 'students', label: 'Học sinh', icon: GraduationCap, roles: ['admin', 'teacher'] },
     { id: 'teachers', label: 'Giáo viên', icon: Users, roles: ['admin'] },
     { id: 'classes', label: 'Quản lý Học phần', icon: BookOpen, roles: ['admin'] },
+    { id: 'semesters', label: 'Quản lý Học kỳ', icon: CalendarDays, roles: ['admin'] },
     { id: 'schedules', label: 'Lịch dạy', icon: Calendar, roles: ['admin', 'teacher'] },
     { id: 'locations', label: 'Vị trí (GPS)', icon: MapPin, roles: ['admin'] },
     { id: 'attendance', label: 'Điểm danh', icon: CheckSquare, roles: ['teacher'] },

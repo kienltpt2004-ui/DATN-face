@@ -156,7 +156,7 @@ public class StudentController {
         List<com.attendance.backend.dto.AttendanceRecordDTO> records = attendanceService.getByStudentAndDateRange(
                 studentId, LocalDate.of(2000, 1, 1), LocalDate.of(2100, 1, 1));
 
-        // Batch load schedules để tránh N+1 query
+        // Batch load schedules by scheduleId
         Set<String> scheduleIds = records.stream()
                 .map(com.attendance.backend.dto.AttendanceRecordDTO::getScheduleId)
                 .filter(sid -> sid != null && !sid.isBlank())
@@ -164,13 +164,32 @@ public class StudentController {
         Map<String, Schedule> scheduleMap = scheduleRepository.findAllById(scheduleIds).stream()
                 .collect(Collectors.toMap(Schedule::getId, s -> s));
 
+        // Fallback: classId -> subject (cho bản ghi thủ công không có scheduleId)
+        Set<String> classIds = records.stream()
+                .map(com.attendance.backend.dto.AttendanceRecordDTO::getClassId)
+                .filter(cid -> cid != null && !cid.isBlank())
+                .collect(Collectors.toSet());
+        Map<String, String> classSubjectFallback = classIds.stream()
+                .collect(Collectors.toMap(
+                        cid -> cid,
+                        cid -> scheduleRepository.findByClassId(cid).stream()
+                                .map(Schedule::getSubject).findFirst().orElse(null),
+                        (a, b) -> a
+                ));
+
         List<StudentAttendanceResponse> responseList = records.stream().map(r -> {
             StudentAttendanceResponse res = new StudentAttendanceResponse();
             res.setClassName(r.getClassId());
             Schedule sched = scheduleMap.get(r.getScheduleId());
-            if (sched != null) res.setSubjectName(sched.getSubject());
+            if (sched != null) {
+                res.setSubjectName(sched.getSubject());
+            } else {
+                res.setSubjectName(classSubjectFallback.get(r.getClassId()));
+            }
             res.setAttendanceTime(r.getDate().toString()
                     + (r.getCheckInTime() != null ? " " + r.getCheckInTime() : ""));
+            res.setStatus(r.getStatus());
+            res.setMethod(r.getMethod() != null ? r.getMethod() : "MANUAL");
             return res;
         }).toList();
 

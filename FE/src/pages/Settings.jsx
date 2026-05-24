@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { api } from '../utils/api';
-import { 
-    School, Bell, Shield, Palette, Check, ShieldAlert, Users,
-    Lock, Mail, User, Eye, EyeOff, MapPin, Camera,
-    Clock, Calendar, Trash2, Edit2, UserMinus, UserCheck, Search, Loader2
+import {
+    Check, Users,
+    Lock, Mail, User, Camera,
+    UserMinus, UserCheck, Search, Loader2
 } from 'lucide-react';
 
 export function Settings({ user: currentUser }) {
@@ -16,22 +16,11 @@ export function Settings({ user: currentUser }) {
     // Filtered users for User Management tab
     const [searchTerm, setSearchTerm] = useState('');
     const [userList, setUserList] = useState([]);
-    
+
     // Settings state
     const [settings, setSettings] = useState({
-        // Account
         name: currentUser?.name || '',
         email: currentUser?.email || '',
-        
-        // Attendance Rules
-        checkInEarly: 15,
-        gpsRadius: 100,
-        requireFace: true,
-        allowLate: true,
-        allowReAttendance: false,
-        
-        // General
-        schoolName: 'Attendance AI School',
     });
 
     useEffect(() => {
@@ -41,25 +30,13 @@ export function Settings({ user: currentUser }) {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [usersData, configData] = await Promise.all([
+            const [usersData] = await Promise.all([
                 isAdmin ? api.get('/users') : Promise.resolve([]),
-                api.get('/settings')
+                api.get('/settings'),
             ]);
-            
+
             if (isAdmin) setUserList(usersData);
-            
-            // Map backend settings to local state
-            if (configData && Object.keys(configData).length > 0) {
-                setSettings(prev => ({
-                    ...prev,
-                    checkInEarly: parseInt(configData.checkInEarly) || prev.checkInEarly,
-                    gpsRadius: parseInt(configData.gpsRadius) || prev.gpsRadius,
-                    requireFace: configData.requireFace === 'true',
-                    allowLate: configData.allowLate === 'true',
-                    allowReAttendance: configData.allowReAttendance === 'true',
-                    schoolName: configData.schoolName || prev.schoolName,
-                }));
-            }
+
         } catch (error) {
             console.error('Failed to fetch settings:', error);
         } finally {
@@ -122,23 +99,6 @@ export function Settings({ user: currentUser }) {
                 throw new Error('Không thể cập nhật hồ sơ: ' + err.message);
             }
 
-            // 2. Save System Settings (Admin only)
-            if (isAdmin) {
-                try {
-                    const configToSave = {
-                        checkInEarly: (settings.checkInEarly ?? 15).toString(),
-                        gpsRadius: (settings.gpsRadius ?? 100).toString(),
-                        requireFace: (settings.requireFace ?? true).toString(),
-                        allowLate: (settings.allowLate ?? true).toString(),
-                        allowReAttendance: (settings.allowReAttendance ?? false).toString(),
-                        schoolName: settings.schoolName || 'Attendance AI School',
-                    };
-                    await api.post('/settings', configToSave);
-                } catch (err) {
-                    throw new Error('Không thể cập nhật cấu hình hệ thống: ' + err.message);
-                }
-            }
-
             setSaved(true);
             setTimeout(() => setSaved(false), 3000);
         } catch (error) {
@@ -178,7 +138,6 @@ export function Settings({ user: currentUser }) {
     const tabs = [
         { id: 'account', label: 'Tài khoản', icon: User },
         { id: 'users', label: 'Người dùng', icon: Users, adminOnly: true },
-        { id: 'attendance', label: 'Luật điểm danh', icon: Lock, adminOnly: true },
     ];
 
     const visibleTabs = tabs.filter(t => !t.adminOnly || isAdmin);
@@ -369,55 +328,6 @@ export function Settings({ user: currentUser }) {
                                             ))}
                                         </tbody>
                                     </table>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Tab 3: Attendance Rules */}
-                    {activeTab === 'attendance' && isAdmin && (
-                        <div className="space-y-6 animate-fade-in">
-                            <div className="card">
-                                <h3 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
-                                    <Shield size={20} className="text-indigo-500" /> Thiết lập Luật điểm danh
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div className="space-y-4">
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Thời gian mở check-in sớm (Phút)</label>
-                                            <div className="relative">
-                                                <Clock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                                                <input type="number" className="input pl-11" value={settings.checkInEarly} onChange={e => handleField('checkInEarly', parseInt(e.target.value))} />
-                                            </div>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Bán kính GPS hợp lệ (Meters)</label>
-                                            <div className="relative">
-                                                <MapPin size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                                                <input type="number" className="input pl-11" value={settings.gpsRadius} onChange={e => handleField('gpsRadius', parseInt(e.target.value))} />
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-4 pt-4 md:pt-6">
-                                        {[
-                                            { key: 'requireFace', label: 'Bắt buộc nhận diện khuôn mặt', icon: Camera },
-                                            { key: 'allowLate', label: 'Cho phép điểm danh muộn', icon: Clock },
-                                            { key: 'allowReAttendance', label: 'Cho phép điểm danh lại', icon: Bell },
-                                        ].map(item => (
-                                            <label key={item.key} className="flex items-center justify-between p-4 border border-gray-100 rounded-2xl hover:bg-slate-50 transition-all cursor-pointer group">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                                        <item.icon size={16} />
-                                                    </div>
-                                                    <span className="text-sm font-bold text-gray-700">{item.label}</span>
-                                                </div>
-                                                <div className={`w-10 h-5 rounded-full transition-all relative ${settings[item.key] ? 'bg-indigo-600' : 'bg-gray-200'}`}>
-                                                    <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${settings[item.key] ? 'left-6' : 'left-1'}`} />
-                                                    <input type="checkbox" className="hidden" checked={settings[item.key]} onChange={() => handleField(item.key, !settings[item.key])} />
-                                                </div>
-                                            </label>
-                                        ))}
-                                    </div>
                                 </div>
                             </div>
                         </div>

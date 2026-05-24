@@ -198,7 +198,7 @@ export function exportDailyAttendancePDF({ className, date, students, attendance
 /**
  * Xuất báo cáo tổng hợp học kỳ
  */
-export function exportSemesterReportPDF({ className, students, records }) {
+export function exportSemesterReportPDF({ className, semesterName, totalSessions, students, records, summary }) {
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     setupFonts(doc);
 
@@ -208,30 +208,57 @@ export function exportSemesterReportPDF({ className, students, records }) {
 
     doc.setFontSize(10);
     doc.setFont('Roboto', 'normal');
-    doc.text(`Lớp: ${className}   |   Học kỳ: 2 (2025-2026)`, doc.internal.pageSize.width / 2, 22, { align: 'center' });
+    const parts = [`Lớp: ${className}`];
+    if (semesterName) parts.push(semesterName);
+    if (totalSessions) parts.push(`Tổng số buổi: ${totalSessions}`);
+    doc.text(parts.join('   |   '), doc.internal.pageSize.width / 2, 22, { align: 'center' });
+    doc.text(`Ngày xuất: ${new Date().toLocaleDateString('vi-VN')}`, doc.internal.pageSize.width / 2, 28, { align: 'center' });
 
-    const tableBody = students.map((s, i) => {
-        const studentRecords = records.filter(r => r.studentId === s.id);
-        const present = studentRecords.filter(r => r.status === 'present').length;
-        const absent = studentRecords.filter(r => r.status === 'absent').length;
-        const late = studentRecords.filter(r => r.status === 'late').length;
-        const total = studentRecords.length || 1;
-        const absentRate = Math.round((absent / total) * 100);
-        return [i + 1, s.id, s.name, total, present, absent, late, `${absentRate}%`];
+    // Use pre-computed summary if available, otherwise compute from raw records
+    const rows = summary || students.map(s => {
+        const sr = records.filter(r => r.studentId === s.id);
+        const present = sr.filter(r => r.status === 'present').length;
+        const absent = sr.filter(r => r.status === 'absent').length;
+        const late = sr.filter(r => r.status === 'late').length;
+        const half = sr.filter(r => r.status === 'half').length;
+        const score = present + late + (half * 0.5);
+        const rate = totalSessions ? Math.round((score / totalSessions) * 100) : 0;
+        return { ...s, present, absent, late, half, rate };
     });
 
+    const tableBody = rows.map((s, i) => [
+        i + 1, s.id, s.name, s.present, s.absent, s.late, s.half, `${s.rate}%`,
+        s.rate >= 100 ? 'CHUYÊN CẦN' : s.rate < 70 ? 'CẤM THI' : s.rate < 80 ? 'CẢNH BÁO' : 'ĐẠT'
+    ]);
+
     autoTable(doc, {
-        startY: 28,
-        head: [['STT', 'Mã HS', 'Họ tên', 'Tổng buổi', 'Có mặt', 'Vắng', 'Muộn', '% Vắng']],
+        startY: 34,
+        head: [['STT', 'Mã HS', 'Họ tên', 'Có mặt', 'Vắng', 'Muộn', 'Nửa buổi', 'Tỉ lệ', 'KQ']],
         body: tableBody,
         ...TABLE_STYLES,
         columnStyles: {
             0: { halign: 'center', cellWidth: 12 },
-            7: { fontStyle: 'bold', halign: 'center' }
+            3: { halign: 'center' },
+            4: { halign: 'center' },
+            5: { halign: 'center' },
+            6: { halign: 'center' },
+            7: { halign: 'center', fontStyle: 'bold' },
+            8: { halign: 'center', fontStyle: 'bold' },
         },
         didParseCell(data) {
+            if (data.section === 'body' && data.column.index === 8) {
+                const val = data.cell.raw;
+                if (val === 'CHUYÊN CẦN') data.cell.styles.textColor = [13, 148, 136];
+                else if (val === 'CẤM THI') data.cell.styles.textColor = [220, 38, 38];
+                else if (val === 'CẢNH BÁO') data.cell.styles.textColor = [234, 88, 12];
+                else data.cell.styles.textColor = [22, 163, 74];
+            }
             if (data.section === 'body' && data.column.index === 7) {
-                if (parseInt(data.cell.raw) > 20) data.cell.styles.textColor = [220, 38, 38];
+                const rate = parseInt(data.cell.raw);
+                if (rate >= 100) data.cell.styles.textColor = [13, 148, 136];
+                else if (rate < 70) data.cell.styles.textColor = [220, 38, 38];
+                else if (rate < 80) data.cell.styles.textColor = [234, 88, 12];
+                else data.cell.styles.textColor = [22, 163, 74];
             }
         }
     });

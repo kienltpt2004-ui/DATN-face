@@ -212,7 +212,7 @@ public class AttendanceActivity extends AppCompatActivity {
                 if (response.isSuccessful() && response.body() != null) {
                     List<AvailableSchedule> list = response.body().getData();
                     if (list != null && !list.isEmpty()) {
-                        activeSchedule = list.get(0); // Lấy môn học đầu tiên đang mở
+                        activeSchedule = list.get(0);
                         tvActiveSubject.setText(activeSchedule.getSubject());
                         tvActiveTime.setText(activeSchedule.getTimeRange());
                         btnAttendance.setEnabled(true);
@@ -221,12 +221,27 @@ public class AttendanceActivity extends AppCompatActivity {
                         tvActiveTime.setText("Vui lòng quay lại sau");
                         btnAttendance.setEnabled(false);
                     }
+                } else {
+                    String errorMsg = "Mã lỗi: " + response.code();
+                    try {
+                        if (response.errorBody() != null) {
+                            String errorJson = response.errorBody().string();
+                            org.json.JSONObject obj = new org.json.JSONObject(errorJson);
+                            errorMsg = obj.optString("message", errorMsg);
+                        }
+                    } catch (Exception ignored) {}
+                    tvActiveSubject.setText("Không thể tải môn học");
+                    tvActiveTime.setText(errorMsg);
+                    btnAttendance.setEnabled(false);
                 }
             }
 
             @Override
             public void onFailure(Call<ApiResponse<List<AvailableSchedule>>> call, Throwable t) {
-                Toast.makeText(AttendanceActivity.this, "Lỗi tải lịch học", Toast.LENGTH_SHORT).show();
+                tvActiveSubject.setText("Lỗi kết nối");
+                tvActiveTime.setText(t.getMessage());
+                btnAttendance.setEnabled(false);
+                Toast.makeText(AttendanceActivity.this, "Lỗi tải lịch học: " + t.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
     }
