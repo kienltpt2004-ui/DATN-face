@@ -462,6 +462,7 @@ public class AttendanceService {
         final com.attendance.backend.entity.Schedule activeSchedule;
         com.attendance.backend.entity.Schedule tempActive = null;
         for (com.attendance.backend.entity.AttendanceRecord record : todaysRecords) {
+            if (record.getScheduleId() == null) continue;
             com.attendance.backend.entity.Schedule s = scheduleRepository.findById(record.getScheduleId()).orElse(null);
             if (s != null) {
                 try {
@@ -475,24 +476,29 @@ public class AttendanceService {
         }
         activeSchedule = tempActive;
 
+        // Tập hợp classId mà sinh viên đã có bản ghi hôm nay (kể cả điểm danh thủ công không có scheduleId)
+        java.util.Set<String> attendedClassIds = todaysRecords.stream()
+                .map(com.attendance.backend.entity.AttendanceRecord::getClassId)
+                .collect(java.util.stream.Collectors.toSet());
+
         List<com.attendance.backend.dto.AvailableScheduleDTO> result = allSchedules.stream().filter(s -> {
             try {
                 LocalTime startTime = LocalTime.parse(s.getStartTime(), TIME_FORMATTER);
-                LocalTime endTime = LocalTime.parse(s.getEndTime(), TIME_FORMATTER);
-                LocalTime startLimit = startTime.minusMinutes(15); // Mở lớp trước 15p để SV thấy
-                LocalTime endLimit = startTime.plusMinutes(30);  // Khóa sau 30p
+                LocalTime startLimit = startTime.minusMinutes(15);
+                LocalTime endLimit = startTime.plusMinutes(30);
                 boolean isMatch = !now.isBefore(startLimit) && !now.isAfter(endLimit);
-                
-                logger.info("[DEBUG] Kiểm tra môn {}: {} - {}. Khung giờ cho phép: {} - {}. Kết quả: {}", 
+
+                logger.info("[DEBUG] Kiểm tra môn {}: {} - {}. Khung giờ cho phép: {} - {}. Kết quả: {}",
                     s.getSubject(), s.getStartTime(), s.getEndTime(), startLimit, endLimit, isMatch);
-                
+
                 return isMatch;
             } catch (Exception e) {
                 logger.error("[DEBUG] Lỗi parse giờ lịch dạy {}: {}", s.getId(), e.getMessage());
                 return false;
             }
         }).map(s -> new com.attendance.backend.dto.AvailableScheduleDTO(
-                s.getId(), s.getClassId(), s.getSubject(), s.getStartTime() + " - " + s.getEndTime()
+                s.getId(), s.getClassId(), s.getSubject(), s.getStartTime() + " - " + s.getEndTime(),
+                attendedClassIds.contains(s.getClassId())
         )).toList();
 
         logger.info("[DEBUG] KẾT THÚC: Hiển thị {} lớp lên App.", result.size());

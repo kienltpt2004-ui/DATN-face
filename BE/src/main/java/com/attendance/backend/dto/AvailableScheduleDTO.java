@@ -5,6 +5,7 @@ public class AvailableScheduleDTO {
     private String classId;
     private String subject;
     private String timeRange;
+    private boolean alreadyAttended;
 
     public AvailableScheduleDTO() {
     }
@@ -14,6 +15,15 @@ public class AvailableScheduleDTO {
         this.classId = classId;
         this.subject = subject;
         this.timeRange = timeRange;
+        this.alreadyAttended = false;
+    }
+
+    public AvailableScheduleDTO(String scheduleId, String classId, String subject, String timeRange, boolean alreadyAttended) {
+        this.scheduleId = scheduleId;
+        this.classId = classId;
+        this.subject = subject;
+        this.timeRange = timeRange;
+        this.alreadyAttended = alreadyAttended;
     }
 
     public String getScheduleId() {
@@ -46,5 +56,13 @@ public class AvailableScheduleDTO {
 
     public void setTimeRange(String timeRange) {
         this.timeRange = timeRange;
+    }
+
+    public boolean isAlreadyAttended() {
+        return alreadyAttended;
+    }
+
+    public void setAlreadyAttended(boolean alreadyAttended) {
+        this.alreadyAttended = alreadyAttended;
     }
 }

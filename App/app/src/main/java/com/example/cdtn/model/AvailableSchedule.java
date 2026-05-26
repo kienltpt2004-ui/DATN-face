@@ -5,6 +5,7 @@ public class AvailableSchedule {
     private String classId;
     private String subject;
     private String timeRange;
+    private boolean alreadyAttended;
 
     public String getScheduleId() {
         return scheduleId;
@@ -36,6 +37,14 @@ public class AvailableSchedule {
 
     public void setTimeRange(String timeRange) {
         this.timeRange = timeRange;
+    }
+
+    public boolean isAlreadyAttended() {
+        return alreadyAttended;
+    }
+
+    public void setAlreadyAttended(boolean alreadyAttended) {
+        this.alreadyAttended = alreadyAttended;
     }
 
     // Ghi đè phương thức toString để hiển thị trên Spinner (Dropdown)
