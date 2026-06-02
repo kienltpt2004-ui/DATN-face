@@ -36,7 +36,7 @@ export function Reports() {
             fetchClassSchedules();
             setActiveView('combined');
         }
-    }, [filterClass, fromDate, toDate]);
+    }, [filterClass, fromDate, toDate, selectedSemesterId]);
 
     const fetchInitialData = async () => {
         try {
@@ -73,7 +73,10 @@ export function Reports() {
         if (!filterClass) return;
         try {
             const data = await api.get(`/schedules/class/${filterClass}`);
-            setClassSchedules(data || []);
+            const filteredSchedules = selectedSemesterId
+                ? (data || []).filter(s => String(s.semesterId) === selectedSemesterId)
+                : (data || []);
+            setClassSchedules(filteredSchedules);
         } catch {
             setClassSchedules([]);
         }

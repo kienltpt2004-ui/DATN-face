@@ -93,7 +93,7 @@ export function Dashboard({ user }) {
                             const barPx = Math.max((rate / (maxRate || 1)) * BAR_MAX_PX, rate > 0 ? 4 : 0);
                             return (
                                 <div key={date} className="flex-1 flex flex-col items-center gap-1">
-                                    <span className="text-[10px] font-bold text-gray-500">{rate > 0 ? `${rate}%` : ''}</span>
+                                    <span className="text-[10px] font-bold text-gray-500">{rate}%</span>
                                     <div
                                         className="w-full rounded-t-lg bg-indigo-500 transition-all hover:bg-indigo-600"
                                         style={{ height: `${barPx}px` }}

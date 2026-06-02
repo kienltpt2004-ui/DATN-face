@@ -303,6 +303,8 @@ public class AttendanceService {
         com.attendance.backend.entity.Schedule schedule = scheduleRepository.findById(scheduleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lịch học"));
 
+        ensureScheduleInActiveSemester(schedule);
+
         if (student.getFaceEmbedding() == null) {
             logger.warn("[DEBUG] SV {} chưa đăng ký khuôn mặt", studentId);
             throw new RuntimeException("Chưa đăng ký khuôn mặt");
@@ -453,6 +455,11 @@ public class AttendanceService {
         List<com.attendance.backend.entity.Schedule> allSchedules = new ArrayList<>();
         for (String cid : classIds) {
             List<com.attendance.backend.entity.Schedule> found = scheduleRepository.findByClassIdAndDayOfWeek(cid, dayOfWeekStr);
+            if (activeSemester != null) {
+                found = found.stream()
+                        .filter(s -> activeSemester.getId().equals(s.getSemesterId()))
+                        .toList();
+            }
             logger.info("[DEBUG] Lớp {}: Tìm thấy {} lịch dạy trong DB cho ngày {}", cid, found.size(), dayOfWeekStr);
             allSchedules.addAll(found);
         }
@@ -503,6 +510,15 @@ public class AttendanceService {
 
         logger.info("[DEBUG] KẾT THÚC: Hiển thị {} lớp lên App.", result.size());
         return result;
+    }
+
+    private void ensureScheduleInActiveSemester(com.attendance.backend.entity.Schedule schedule) {
+        com.attendance.backend.entity.Semester activeSemester = semesterRepository.findByIsActiveTrue()
+                .orElseThrow(() -> new RuntimeException("Chưa có học kỳ đang hoạt động"));
+
+        if (!activeSemester.getId().equals(schedule.getSemesterId())) {
+            throw new RuntimeException("Lịch học này không thuộc học kỳ đang hoạt động");
+        }
     }
 
     /**

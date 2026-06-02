@@ -31,6 +31,7 @@ import com.example.cdtn.model.AttendanceRequest;
 import com.example.cdtn.model.AttendanceResponse;
 import com.example.cdtn.model.AvailableSchedule;
 import com.example.cdtn.utils.ImageUtils;
+import com.google.android.material.snackbar.Snackbar;
 
 // import java.util.ArrayList;
 import java.util.List;
@@ -153,7 +154,7 @@ public class AttendanceActivity extends AppCompatActivity {
                         }
                     } catch (Exception ignored) {}
 
-                    Toast.makeText(AttendanceActivity.this, "Thất bại: " + errorMsg, Toast.LENGTH_LONG).show();
+                    showFullMessage("Thất bại: " + errorMsg);
 
                     if (errorMsg.contains("Vui lòng bật GPS")) {
                         checkGPSAndRun();
@@ -163,9 +164,24 @@ public class AttendanceActivity extends AppCompatActivity {
 
             @Override
             public void onFailure(Call<ApiResponse<AttendanceResponse>> call, Throwable t) {
-                Toast.makeText(AttendanceActivity.this, "Lỗi kết nối: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                showFullMessage("Lỗi kết nối: " + t.getMessage());
             }
         });
+    }
+
+    private void showFullMessage(String message) {
+        Snackbar snackbar = Snackbar
+                .make(findViewById(android.R.id.content), message, Snackbar.LENGTH_LONG)
+                .setAction("Đóng", v -> {});
+
+        View snackbarView = snackbar.getView();
+        TextView snackbarText = snackbarView.findViewById(com.google.android.material.R.id.snackbar_text);
+        snackbarText.setSingleLine(false);
+        snackbarText.setMaxLines(Integer.MAX_VALUE);
+        snackbarText.setEllipsize(null);
+
+        snackbar.setDuration(6000);
+        snackbar.show();
     }
 
     private void requestLocationPermission() {

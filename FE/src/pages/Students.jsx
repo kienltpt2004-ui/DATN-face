@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 import { exportStudentListPDF } from '../utils/pdfExport';
 import { getAutoColumnWidths } from '../utils/excelExport';
-import { Plus, Search, Edit2, Trash2, Download, X, Check, FileSpreadsheet, Upload, Mail, Phone, Users, ChevronRight, ArrowLeft, BookOpen } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Download, X, Check, FileSpreadsheet, Upload, Mail, Phone, Users, ChevronRight, ArrowLeft } from 'lucide-react';
 import { parseExcel } from '../utils/excelImport';
 
 function StudentModal({ student, classes, onClose, onSave }) {

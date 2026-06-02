@@ -28,15 +28,18 @@ public class StudentController {
     private final StudentService studentService;
     private final com.attendance.backend.repository.TeacherRepository teacherRepository;
     private final com.attendance.backend.repository.ScheduleRepository scheduleRepository;
+    private final com.attendance.backend.repository.SemesterRepository semesterRepository;
     private final AttendanceService attendanceService;
 
     public StudentController(StudentService studentService,
                              com.attendance.backend.repository.TeacherRepository teacherRepository,
                              com.attendance.backend.repository.ScheduleRepository scheduleRepository,
+                             com.attendance.backend.repository.SemesterRepository semesterRepository,
                              AttendanceService attendanceService) {
         this.studentService = studentService;
         this.teacherRepository = teacherRepository;
         this.scheduleRepository = scheduleRepository;
+        this.semesterRepository = semesterRepository;
         this.attendanceService = attendanceService;
     }
 
@@ -213,6 +216,9 @@ public class StudentController {
             org.springframework.security.core.Authentication authentication) {
         String studentId = authentication.getName();
         com.attendance.backend.dto.StudentDTO student = studentService.getStudentById(studentId);
+        Long activeSemesterId = semesterRepository.findByIsActiveTrue()
+                .map(com.attendance.backend.entity.Semester::getId)
+                .orElse(null);
 
         List<com.attendance.backend.dto.ScheduleDTO> schedules = new java.util.ArrayList<>();
         if (student.getClassId() != null && !student.getClassId().trim().isEmpty()) {
@@ -220,16 +226,20 @@ public class StudentController {
                     .map(String::trim).filter(s -> !s.isEmpty()).toList();
             for (String classId : classIds) {
                 scheduleRepository.findByClassId(classId).stream()
+                        .filter(s -> activeSemesterId != null && activeSemesterId.equals(s.getSemesterId()))
                         .map(s -> com.attendance.backend.dto.ScheduleDTO.builder()
                                 .id(s.getId())
                                 .classId(s.getClassId())
                                 .subject(s.getSubject())
                                 .teacherId(s.getTeacherId())
+                                .teacherName(s.getTeacherName())
                                 .dayOfWeek(s.getDayOfWeek())
                                 .startTime(s.getStartTime())
                                 .endTime(s.getEndTime())
                                 .room(s.getRoom())
                                 .locationId(s.getLocationId())
+                                .semesterId(s.getSemesterId())
+                                .sessionsCount(s.getSessionsCount())
                                 .build())
                         .forEach(schedules::add);
             }

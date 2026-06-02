@@ -4,6 +4,7 @@ import com.attendance.backend.entity.AttendanceRecord;
 import com.attendance.backend.entity.Schedule;
 import com.attendance.backend.entity.Student;
 import com.attendance.backend.repository.AttendanceRecordRepository;
+import com.attendance.backend.repository.SemesterRepository;
 import com.attendance.backend.repository.ScheduleRepository;
 import com.attendance.backend.repository.StudentRepository;
 import com.attendance.backend.utils.TimeUtils;
@@ -28,13 +29,16 @@ public class AttendanceScheduler {
     private final ScheduleRepository scheduleRepository;
     private final StudentRepository studentRepository;
     private final AttendanceRecordRepository attendanceRepo;
+    private final SemesterRepository semesterRepository;
 
     public AttendanceScheduler(ScheduleRepository scheduleRepository,
                                StudentRepository studentRepository,
-                               AttendanceRecordRepository attendanceRepo) {
+                               AttendanceRecordRepository attendanceRepo,
+                               SemesterRepository semesterRepository) {
         this.scheduleRepository = scheduleRepository;
         this.studentRepository = studentRepository;
         this.attendanceRepo = attendanceRepo;
+        this.semesterRepository = semesterRepository;
     }
 
     /**
@@ -46,8 +50,17 @@ public class AttendanceScheduler {
         LocalDate today = LocalDate.now(ZONE);
         LocalTime now = LocalTime.now(ZONE);
         String dayOfWeek = getVietnameseDayOfWeek(today.getDayOfWeek().getValue());
+        Long activeSemesterId = semesterRepository.findByIsActiveTrue()
+                .map(com.attendance.backend.entity.Semester::getId)
+                .orElse(null);
+
+        if (activeSemesterId == null) {
+            logger.info("[Scheduler] Chưa có học kỳ hoạt động, bỏ qua tự động ghi vắng.");
+            return;
+        }
 
         List<Schedule> endedSchedules = scheduleRepository.findAll().stream()
+                .filter(s -> activeSemesterId.equals(s.getSemesterId()))
                 .filter(s -> s.getDayOfWeek().equalsIgnoreCase(dayOfWeek))
                 .filter(s -> {
                     try {

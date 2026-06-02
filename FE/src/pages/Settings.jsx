@@ -333,20 +333,18 @@ export function Settings({ user: currentUser }) {
                         </div>
                     )}
 
-                    {/* Footer Actions */}
-                    <div className="sticky bottom-6 flex items-center justify-end">
-                        <div className="flex items-center gap-4 p-2 bg-white/80 backdrop-blur-md rounded-3xl border border-gray-100 shadow-2xl">
-                            <button className="px-6 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-800 transition-colors">Hủy thay đổi</button>
-                            <button 
+                    {activeTab === 'account' && (
+                        <div className="flex items-center justify-end">
+                            <button
                                 onClick={handleSave}
                                 disabled={isSaving}
-                                className={`btn-primary px-10 py-3 shadow-lg shadow-indigo-200 ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                className={`btn-primary px-8 py-3 shadow-lg shadow-indigo-200 ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
                             >
                                 {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} strokeWidth={3} />}
-                                {isSaving ? 'Đang lưu...' : 'Lưu toàn bộ cấu hình'}
+                                {isSaving ? 'Đang lưu...' : 'Lưu thông tin tài khoản'}
                             </button>
                         </div>
-                    </div>
+                    )}
                 </div>
             </div>
         </div>

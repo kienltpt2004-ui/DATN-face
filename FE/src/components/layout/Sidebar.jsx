@@ -52,7 +52,7 @@ export function Sidebar({ currentPage, onNavigate, onLogout, user }) {
                     <GraduationCap className="text-white" size={22} />
                 </div>
                 <div>
-                    <h1 className="text-white font-bold text-lg leading-tight">BEER AI</h1>
+                    <h1 className="text-white font-bold text-lg leading-tight">Attendance AI</h1>
                     <p className="text-indigo-300 text-xs">Quản lý điểm danh</p>
                 </div>
             </div>

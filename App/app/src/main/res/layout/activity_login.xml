@@ -47,12 +47,14 @@
                 android:textStyle="bold" />
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:text="Hệ thống điểm danh thông minh"
+                android:gravity="center"
+                android:lineSpacingExtra="2dp"
+                android:text="HỆ THỐNG ĐIỂM DANH VÀ QUẢN LÝ SINH VIÊN ỨNG DỤNG NHẬN DẠNG KHUÔN MẶT"
                 android:textColor="@color/text_secondary"
-                android:textSize="14sp" />
+                android:textSize="11sp" />
 
             <!-- Input Fields -->
             <com.google.android.material.textfield.TextInputLayout

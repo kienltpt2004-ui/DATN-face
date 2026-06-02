@@ -45,7 +45,7 @@ export function Login({ onLogin }) {
                         <GraduationCap className="text-white" size={32} />
                     </div>
                     <h1 className="text-2xl font-bold text-gray-800">Attendance AI</h1>
-                    <p className="text-gray-500 text-sm mt-1">Hệ thống điểm danh thông minh</p>
+                    <p className="text-gray-500 text-sm mt-1">HỆ THỐNG ĐIỂM DANH VÀ QUẢN LÝ SINH VIÊN ỨNG DỤNG NHẬN DẠNG KHUÔN MẶT</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-8 pt-6 space-y-4">

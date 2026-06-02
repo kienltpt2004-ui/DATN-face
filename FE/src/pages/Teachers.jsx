@@ -192,7 +192,6 @@ export function Teachers() {
                                         {teacher.phone}
                                     </div>
                                 </td>
-
                                 <td className="px-6 py-4 text-right space-x-2">
                                     <button onClick={() => openEdit(teacher)} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all">
                                         <Edit2 size={16} />
