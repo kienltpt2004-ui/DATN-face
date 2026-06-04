@@ -12,7 +12,8 @@ function AttendanceBadge({ status }) {
     return <span className="text-gray-300">—</span>;
 }
 
-export function Reports() {
+export function Reports({ user }) {
+    const isTeacher = user?.role?.toLowerCase() === 'teacher';
     const [classes, setClasses] = useState([]);
     const [filterClass, setFilterClass] = useState('');
     const [semesters, setSemesters] = useState([]);
@@ -72,10 +73,10 @@ export function Reports() {
     const fetchClassSchedules = async () => {
         if (!filterClass) return;
         try {
-            const data = await api.get(`/schedules/class/${filterClass}`);
+            const data = await api.get(isTeacher ? '/schedules' : `/schedules/class/${filterClass}`);
             const filteredSchedules = selectedSemesterId
-                ? (data || []).filter(s => String(s.semesterId) === selectedSemesterId)
-                : (data || []);
+                ? (data || []).filter(s => s.classId === filterClass && String(s.semesterId) === selectedSemesterId)
+                : (data || []).filter(s => s.classId === filterClass);
             setClassSchedules(filteredSchedules);
         } catch {
             setClassSchedules([]);

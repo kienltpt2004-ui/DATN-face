@@ -97,7 +97,11 @@ public class AttendanceController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             org.springframework.security.core.Authentication authentication) {
         checkAccess(classId, authentication);
-        return ResponseEntity.ok(attendanceService.getByClassAndDateRange(classId, from, to));
+        if (isAdmin(authentication)) {
+            return ResponseEntity.ok(attendanceService.getByClassAndDateRange(classId, from, to));
+        }
+        String teacherId = resolveTeacherId(authentication);
+        return ResponseEntity.ok(attendanceService.getByClassAndDateRangeForTeacher(classId, from, to, teacherId));
     }
 
     /**

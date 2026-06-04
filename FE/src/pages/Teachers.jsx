@@ -3,6 +3,24 @@ import { api } from '../utils/api';
 import { UserPlus, Search, Edit2, Trash2, Mail, Phone, /* BookOpen, */ X, Check, Upload /*, FileSpreadsheet */ } from 'lucide-react';
 import { parseExcel } from '../utils/excelImport';
 
+const getNextCode = (items, fallbackPrefix) => {
+    const parsed = items
+        .map(item => String(item.id || '').trim().match(/^(.*?)(\d+)$/))
+        .filter(Boolean)
+        .filter(match => match[1].toUpperCase() === fallbackPrefix.toUpperCase())
+        .map(match => ({
+            prefix: match[1],
+            number: parseInt(match[2], 10),
+            width: match[2].length,
+        }))
+        .filter(item => Number.isFinite(item.number));
+
+    if (parsed.length === 0) return `${fallbackPrefix}001`;
+
+    const latest = parsed.reduce((max, item) => item.number > max.number ? item : max, parsed[0]);
+    return `${latest.prefix}${String(latest.number + 1).padStart(latest.width, '0')}`;
+};
+
 export function Teachers() {
     const [teachersList, setTeachersList] = useState([]);
     // const [classes, setClasses] = useState([]);
@@ -32,12 +50,17 @@ export function Teachers() {
         t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         t.id.toLowerCase().includes(searchTerm.toLowerCase())
     );
+    const nextTeacherId = getNextCode(teachersList, 'GV');
 
-    const validateForm = (form) => {
+    const validateForm = (form, isEdit = false) => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         const phoneRegex = /^[0-9]{10,11}$/;
         if (!form.name || !form.id) {
             alert('Vui lòng nhập tên và mã giáo viên');
+            return false;
+        }
+        if (!isEdit && teachersList.some(t => t.id === form.id.trim())) {
+            alert('Ma giao vien "' + form.id + '" da ton tai trong danh sach');
             return false;
         }
         if (form.email && !emailRegex.test(form.email)) {
@@ -53,7 +76,7 @@ export function Teachers() {
 
     const handleSave = async (e) => {
         e.preventDefault();
-        if (!validateForm(formData)) return;
+        if (!validateForm(formData, !!editingTeacher)) return;
         
         const payload = {
             ...formData
@@ -141,7 +164,7 @@ export function Teachers() {
                     </label>
                     <button
                         className="btn-primary flex items-center gap-2 whitespace-nowrap"
-                        onClick={() => { setEditingTeacher(null); setFormData({ name: '', id: '', email: '', phone: '', gender: 'Nam' }); setShowModal(true); }}
+                        onClick={() => { setEditingTeacher(null); setFormData({ name: '', id: nextTeacherId, email: '', phone: '', gender: 'Nam' }); setShowModal(true); }}
                     >
                         <UserPlus size={18} /> Thêm giáo viên
                     </button>

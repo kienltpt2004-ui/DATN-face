@@ -3,7 +3,7 @@
 
 ---
 
-**Tên dự án:** Attendance AI - Hệ thống Quản lý Điểm danh Thông minh  
+**Tên dự án:** Attendance AI - HỆ THỐNG ĐIỂM DANH VÀ QUẢN LÝ SINH VIÊN ỨNG DỤNG NHẬN DẠNG KHUÔN MẶT  
 **Công nghệ:** Spring Boot · React · Python FastAPI · Android  
 **Cơ sở dữ liệu:** MySQL  
 **Phiên bản tài liệu:** 1.0  

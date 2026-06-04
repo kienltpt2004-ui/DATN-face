@@ -5,9 +5,27 @@ import { getAutoColumnWidths } from '../utils/excelExport';
 import { Plus, Search, Edit2, Trash2, Download, X, Check, FileSpreadsheet, Upload, Mail, Phone, Users, ChevronRight, ArrowLeft } from 'lucide-react';
 import { parseExcel } from '../utils/excelImport';
 
-function StudentModal({ student, classes, onClose, onSave }) {
+const getNextCode = (items, fallbackPrefix) => {
+    const parsed = items
+        .map(item => String(item.id || '').trim().match(/^(.*?)(\d+)$/))
+        .filter(Boolean)
+        .filter(match => match[1].toUpperCase() === fallbackPrefix.toUpperCase())
+        .map(match => ({
+            prefix: match[1],
+            number: parseInt(match[2], 10),
+            width: match[2].length,
+        }))
+        .filter(item => Number.isFinite(item.number));
+
+    if (parsed.length === 0) return `${fallbackPrefix}001`;
+
+    const latest = parsed.reduce((max, item) => item.number > max.number ? item : max, parsed[0]);
+    return `${latest.prefix}${String(latest.number + 1).padStart(latest.width, '0')}`;
+};
+
+function StudentModal({ student, classes, defaultId, onClose, onSave }) {
     const [form, setForm] = useState({
-        id: student?.id || '',
+        id: student?.id || defaultId || '',
         name: student?.name || '',
         gender: student?.gender || 'Nam',
         dob: student?.dob || '',
@@ -84,6 +102,7 @@ export function Students({ user }) {
     const [selectedClass, setSelectedClass] = useState(null);
     const [modal, setModal] = useState(null);
     const [deleteId, setDeleteId] = useState(null);
+    const nextStudentId = getNextCode(students, 'HS');
 
     useEffect(() => { fetchData(); }, []);
 
@@ -452,6 +471,7 @@ export function Students({ user }) {
                 <StudentModal
                     student={modal === 'add' ? null : modal}
                     classes={classes}
+                    defaultId={modal === 'add' ? nextStudentId : ''}
                     onClose={() => setModal(null)}
                     onSave={handleSave}
                 />
