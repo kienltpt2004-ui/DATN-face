@@ -30,7 +30,11 @@ public class ClassRoomController {
 
     @GetMapping
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public ResponseEntity<List<ClassRoom>> getAll(org.springframework.security.core.Authentication authentication) {
+    public ResponseEntity<?> getAll(org.springframework.security.core.Authentication authentication,
+                                    @RequestParam(required = false) Integer page,
+                                    @RequestParam(required = false) Integer limit,
+                                    @RequestParam(required = false, defaultValue = "") String search) {
+        boolean wantsPage = page != null || limit != null;
         boolean isAdmin = authentication.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ADMIN"));
         
@@ -68,6 +72,9 @@ public class ClassRoomController {
             }
         }
         
+        if (wantsPage) {
+            return ResponseEntity.ok(classRoomService.getClassesPage(search, page, limit));
+        }
         return ResponseEntity.ok(classRoomService.getAllClasses());
     }
 

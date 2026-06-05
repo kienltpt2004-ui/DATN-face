@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 import { UserPlus, Search, Edit2, Trash2, Mail, Phone, /* BookOpen, */ X, Check, Upload /*, FileSpreadsheet */ } from 'lucide-react';
 import { parseExcel } from '../utils/excelImport';
+import { Pagination } from '../components/common/Pagination';
+import { usePagination } from '../hooks/usePagination';
 
 const getNextCode = (items, fallbackPrefix) => {
     const parsed = items
@@ -50,6 +52,7 @@ export function Teachers() {
         t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         t.id.toLowerCase().includes(searchTerm.toLowerCase())
     );
+    const pagination = usePagination(filteredTeachers, { resetKeys: [searchTerm] });
     const nextTeacherId = getNextCode(teachersList, 'GV');
 
     const validateForm = (form, isEdit = false) => {
@@ -171,6 +174,11 @@ export function Teachers() {
                 </div>
             </div>
 
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+                <span className="bg-indigo-50 text-indigo-700 font-semibold px-2 py-0.5 rounded-md">{filteredTeachers.length}</span>
+                giáo viên
+            </div>
+
             {/* Table */}
             <div className="card p-0 overflow-hidden relative min-h-[200px]">
                 {loading && (
@@ -189,7 +197,7 @@ export function Teachers() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                        {filteredTeachers.map((teacher) => (
+                        {pagination.pageItems.map((teacher) => (
                             <tr key={teacher.id} className="hover:bg-slate-50/50 transition-colors">
                                 <td className="px-6 py-4">
                                     <div className="flex items-center gap-3">
@@ -230,6 +238,7 @@ export function Teachers() {
                 {!loading && filteredTeachers.length === 0 && (
                     <div className="p-12 text-center text-gray-400 italic">Không tìm thấy giáo viên nào.</div>
                 )}
+                <Pagination {...pagination} onPageChange={pagination.setPage} onPageSizeChange={pagination.setPageSize} />
             </div>
 
             {/* Modal */}

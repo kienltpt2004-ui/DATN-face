@@ -1,5 +1,6 @@
 package com.attendance.backend.service;
 
+import com.attendance.backend.dto.PaginatedResponse;
 import com.attendance.backend.dto.TeacherDTO;
 import com.attendance.backend.entity.Teacher;
 import com.attendance.backend.entity.User;
@@ -8,6 +9,9 @@ import com.attendance.backend.repository.AttendanceRecordRepository;
 import com.attendance.backend.repository.ScheduleRepository;
 import com.attendance.backend.repository.TeacherRepository;
 import com.attendance.backend.repository.UserRepository;
+import com.attendance.backend.utils.PaginationUtils;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +43,11 @@ public class TeacherService {
         return teacherRepository.findAll().stream()
                 .map(this::toDTO)
                 .toList();
+    }
+
+    public PaginatedResponse<TeacherDTO> getTeachersPage(String search, Integer page, Integer limit) {
+        Pageable pageable = PaginationUtils.toPageable(page, limit, Sort.by("id").ascending());
+        return PaginationUtils.fromPage(teacherRepository.search(search, pageable).map(this::toDTO));
     }
 
     public TeacherDTO getTeacherById(String id) {

@@ -4,6 +4,8 @@ import { exportStudentListPDF } from '../utils/pdfExport';
 import { getAutoColumnWidths } from '../utils/excelExport';
 import { Plus, Search, Edit2, Trash2, Download, X, Check, FileSpreadsheet, Upload, Mail, Phone, Users, ChevronRight, ArrowLeft } from 'lucide-react';
 import { parseExcel } from '../utils/excelImport';
+import { Pagination } from '../components/common/Pagination';
+import { usePagination } from '../hooks/usePagination';
 
 const getNextCode = (items, fallbackPrefix) => {
     const parsed = items
@@ -136,6 +138,8 @@ export function Students({ user }) {
             (s.name || '').toLowerCase().includes(search.toLowerCase()) || (s.id || '').includes(search)
           )
         : [];
+    const adminPagination = usePagination(filtered, { resetKeys: [search] });
+    const classPagination = usePagination(filteredClassStudents, { resetKeys: [search, selectedClass?.id] });
 
     const handleSelectClass = (cls) => {
         setSelectedClass(cls);
@@ -354,7 +358,8 @@ export function Students({ user }) {
                                 <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
                             </div>
                         )}
-                        {renderStudentTable(filtered, true)}
+                        {renderStudentTable(adminPagination.pageItems, true)}
+                        <Pagination {...adminPagination} onPageChange={adminPagination.setPage} onPageSizeChange={adminPagination.setPageSize} />
                     </div>
                 </>
             )}
@@ -459,7 +464,8 @@ export function Students({ user }) {
                                         <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
                                     </div>
                                 )}
-                                {renderStudentTable(filteredClassStudents, false)}
+                                {renderStudentTable(classPagination.pageItems, false)}
+                                <Pagination {...classPagination} onPageChange={classPagination.setPage} onPageSizeChange={classPagination.setPageSize} />
                             </div>
                         </div>
                     )}

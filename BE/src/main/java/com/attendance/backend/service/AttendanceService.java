@@ -62,13 +62,17 @@ public class AttendanceService {
     }
 
     /** Lấy toàn bộ điểm danh theo lớp trong khoảng ngày (Admin: tất cả giáo viên) */
+    @Transactional
     public List<AttendanceRecordDTO> getByClassAndDateRange(String classId, LocalDate from, LocalDate to) {
+        backfillMissingScheduleIds(classId, from, to);
         return attendanceRepo.findValidRecordsByClassAndDateRange(classId, from, to)
                 .stream().map(this::toDTO).toList();
     }
 
     /** Lấy điểm danh theo lớp trong khoảng ngày, chỉ lấy buổi do teacherId dạy */
+    @Transactional
     public List<AttendanceRecordDTO> getByClassAndDateRangeForTeacher(String classId, LocalDate from, LocalDate to, String teacherId) {
+        backfillMissingScheduleIds(classId, from, to);
         List<String> scheduleIds = scheduleRepository.findByTeacherIdIgnoreCase(teacherId).stream()
                 .filter(s -> s.getClassId().equalsIgnoreCase(classId))
                 .map(com.attendance.backend.entity.Schedule::getId)
@@ -79,7 +83,9 @@ public class AttendanceService {
     }
 
     /** Lấy điểm danh theo lớp và ngày, chỉ lấy buổi do teacherId dạy */
+    @Transactional
     public List<AttendanceRecordDTO> getByClassAndDateForTeacher(String classId, LocalDate date, String teacherId) {
+        backfillMissingScheduleIds(classId, date, date);
         List<String> scheduleIds = scheduleRepository.findByTeacherIdIgnoreCase(teacherId).stream()
                 .filter(s -> s.getClassId().equalsIgnoreCase(classId))
                 .map(com.attendance.backend.entity.Schedule::getId)
@@ -90,6 +96,30 @@ public class AttendanceService {
     }
 
     /** Ghi nhận điểm danh hàng loạt cho cả lớp */
+    private void backfillMissingScheduleIds(String classId, LocalDate from, LocalDate to) {
+        List<AttendanceRecord> missingRecords = attendanceRepo
+                .findMissingScheduleRecordsByClassAndDateRange(classId, from, to);
+        if (missingRecords.isEmpty()) return;
+
+        List<com.attendance.backend.entity.Schedule> classSchedules = scheduleRepository.findByClassId(classId);
+        List<AttendanceRecord> updated = new ArrayList<>();
+
+        for (AttendanceRecord record : missingRecords) {
+            String dayOfWeek = getVietnameseDayOfWeek(record.getDate().getDayOfWeek().getValue());
+            List<com.attendance.backend.entity.Schedule> schedulesForDay = classSchedules.stream()
+                    .filter(s -> s.getDayOfWeek().equalsIgnoreCase(dayOfWeek))
+                    .toList();
+            if (schedulesForDay.size() == 1) {
+                record.setScheduleId(schedulesForDay.get(0).getId());
+                updated.add(record);
+            }
+        }
+
+        if (!updated.isEmpty()) {
+            attendanceRepo.saveAll(updated);
+        }
+    }
+
     @Transactional
     public List<AttendanceRecordDTO> bulkSave(BulkAttendanceRequest request) {
         LocalDate date = LocalDate.parse(request.getDate());
@@ -121,6 +151,29 @@ public class AttendanceService {
 
         // Ràng buộc 3: Chỉ được điểm danh trong khung giờ học (cho phép buffer 30p trước và sau)
         LocalTime nowBulk = LocalTime.now(zoneId);
+        String requestedScheduleId = request.getScheduleId();
+        String resolvedScheduleId = (requestedScheduleId == null || requestedScheduleId.isBlank())
+                ? daySchedules.stream()
+                        .filter(s -> {
+                            try {
+                                LocalTime start = LocalTime.parse(s.getStartTime(), TIME_FORMATTER).minusMinutes(30);
+                                LocalTime end = LocalTime.parse(s.getEndTime(), TIME_FORMATTER).plusMinutes(30);
+                                return !nowBulk.isBefore(start) && !nowBulk.isAfter(end);
+                            } catch (DateTimeParseException e) {
+                                return false;
+                            }
+                        })
+                        .findFirst()
+                        .orElse(daySchedules.get(0))
+                        .getId()
+                : requestedScheduleId;
+
+        boolean scheduleMatchesClassDay = daySchedules.stream()
+                .anyMatch(s -> s.getId().equals(resolvedScheduleId));
+        if (!scheduleMatchesClassDay) {
+            throw new RuntimeException("Lịch học không thuộc học phần/ngày điểm danh này");
+        }
+
         logger.info("Checking attendance time for class: {}, day: {}, now: {}", request.getClassId(), dayOfWeekStr, nowBulk);
 
         boolean isWithinTime = daySchedules.stream().anyMatch(s -> {
@@ -167,6 +220,7 @@ public class AttendanceService {
             java.util.Optional<AttendanceRecord> existingFaceRecord = attendanceRepo
                     .findByStudentIdAndDate(studentId, date).stream()
                     .filter(r -> r.getClassId().equalsIgnoreCase(request.getClassId())
+                                 && resolvedScheduleId.equals(r.getScheduleId())
                                  && r.getMethod() == AttendanceRecord.Method.FACE_ID)
                     .findFirst();
             if (existingFaceRecord.isPresent()) {
@@ -176,8 +230,17 @@ public class AttendanceService {
 
             // Upsert: nếu đã có thì cập nhật (dựa trên student, date, class và schedule)
             AttendanceRecord record = attendanceRepo
-                    .findByStudentIdAndDateAndClassIdAndScheduleId(studentId, date, request.getClassId(), request.getScheduleId())
+                    .findByStudentIdAndDateAndClassIdAndScheduleId(studentId, date, request.getClassId(), resolvedScheduleId)
                     .orElse(null);
+
+            if (record == null) {
+                record = attendanceRepo.findByStudentIdAndDate(studentId, date).stream()
+                        .filter(r -> r.getClassId().equalsIgnoreCase(request.getClassId())
+                                && r.getScheduleId() == null
+                                && r.getMethod() != AttendanceRecord.Method.FACE_ID)
+                        .findFirst()
+                        .orElse(null);
+            }
 
             if (record == null) {
                 record = AttendanceRecord.builder()
@@ -185,7 +248,7 @@ public class AttendanceService {
                         .studentName(student.getName())
                         .classId(request.getClassId())
                         .date(date)
-                        .scheduleId(request.getScheduleId())
+                        .scheduleId(resolvedScheduleId)
                         .method(AttendanceRecord.Method.MANUAL)
                         .build();
             }
@@ -195,7 +258,7 @@ public class AttendanceService {
             // Logic mới: Tự động tính trạng thái dựa trên thời gian nếu GV chọn 'present'
             if (status == AttendanceRecord.AttendanceStatus.present) {
                 com.attendance.backend.entity.Schedule sched = daySchedules.stream()
-                        .filter(s -> s.getId().equals(request.getScheduleId()))
+                        .filter(s -> s.getId().equals(resolvedScheduleId))
                         .findFirst().orElse(null);
                 if (sched != null) {
                     LocalTime startTime = LocalTime.parse(sched.getStartTime(), TIME_FORMATTER);
@@ -211,6 +274,9 @@ public class AttendanceService {
                 }
                 record.setCheckInTime(LocalTime.now(zoneId));
             }
+            record.setScheduleId(resolvedScheduleId);
+            record.setMethod(AttendanceRecord.Method.MANUAL);
+            record.setNote("Điểm danh thủ công");
             saved.add(attendanceRepo.save(record));
         });
 
@@ -257,9 +323,10 @@ public class AttendanceService {
         }
         
         long present = attendanceRepo.countByStatusAndStudentAndDateRange(studentId, AttendanceRecord.AttendanceStatus.present, from, to);
+        long late = attendanceRepo.countByStatusAndStudentAndDateRange(studentId, AttendanceRecord.AttendanceStatus.late, from, to);
         long half = attendanceRepo.countByStatusAndStudentAndDateRange(studentId, AttendanceRecord.AttendanceStatus.half, from, to);
         
-        double totalPresentValue = (double) present + (half * 0.5);
+        double totalPresentValue = (double) present + (late * 0.75) + (half * 0.5);
         double rate = Math.round(totalPresentValue / total * 1000.0) / 10.0;
         double absenceRate = 100.0 - rate;
         

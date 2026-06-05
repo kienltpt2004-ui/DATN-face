@@ -1,5 +1,6 @@
 package com.attendance.backend.service;
 
+import com.attendance.backend.dto.PaginatedResponse;
 import com.attendance.backend.entity.ClassRoom;
 import com.attendance.backend.exception.ResourceNotFoundException;
 import com.attendance.backend.repository.AttendanceRecordRepository;
@@ -8,6 +9,9 @@ import com.attendance.backend.repository.ScheduleRepository;
 import com.attendance.backend.repository.StudentRepository;
 import com.attendance.backend.repository.TeacherRepository;
 import com.attendance.backend.repository.UserRepository;
+import com.attendance.backend.utils.PaginationUtils;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +45,11 @@ public class ClassRoomService {
 
     public List<ClassRoom> getAllClasses() {
         return classRoomRepository.findAll();
+    }
+
+    public PaginatedResponse<ClassRoom> getClassesPage(String search, Integer page, Integer limit) {
+        Pageable pageable = PaginationUtils.toPageable(page, limit, Sort.by("id").ascending());
+        return PaginationUtils.fromPage(classRoomRepository.search(search, pageable));
     }
 
     public List<ClassRoom> getByIds(List<String> ids) {

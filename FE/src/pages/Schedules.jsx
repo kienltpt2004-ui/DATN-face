@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 import { Plus, Search, Edit2, Trash2, Calendar, Clock, X, Check, MapPin, Users } from 'lucide-react';
+import { Pagination } from '../components/common/Pagination';
+import { usePagination } from '../hooks/usePagination';
 
 export function Schedules({ user }) {
     const isTeacher = user?.role?.toLowerCase() === 'teacher';
@@ -63,6 +65,7 @@ export function Schedules({ user }) {
             (!isTeacher && (s.teacherName || '').toLowerCase().includes(searchTerm.toLowerCase()))
         );
     });
+    const pagination = usePagination(filtered, { resetKeys: [searchTerm, semesterFilter] });
 
     const handleSave = async (e) => {
         e.preventDefault();
@@ -227,7 +230,7 @@ export function Schedules({ user }) {
                     </div>
                 )}
                 {['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'].map(day => {
-                    const daySchedules = filtered.filter(s => {
+                    const daySchedules = pagination.pageItems.filter(s => {
                         const vnDay = {
                             'MONDAY': 'Thứ 2', 'TUESDAY': 'Thứ 3', 'WEDNESDAY': 'Thứ 4',
                             'THURSDAY': 'Thứ 5', 'FRIDAY': 'Thứ 6', 'SATURDAY': 'Thứ 7', 'SUNDAY': 'Chủ Nhật'
@@ -315,6 +318,9 @@ export function Schedules({ user }) {
                         <p className="text-xs">Nhấn vào "Tạo lịch học mới" để bắt đầu.</p>
                     </div>
                 )}
+            </div>
+            <div className="card p-0 overflow-hidden">
+                <Pagination {...pagination} onPageChange={pagination.setPage} onPageSizeChange={pagination.setPageSize} />
             </div>
 
             {showModal && (

@@ -5,6 +5,8 @@ import {
     Lock, Mail, User, Camera,
     UserMinus, UserCheck, Search, Loader2
 } from 'lucide-react';
+import { Pagination } from '../components/common/Pagination';
+import { usePagination } from '../hooks/usePagination';
 
 export function Settings({ user: currentUser }) {
     const isAdmin = currentUser?.role?.toLowerCase() === 'admin';
@@ -134,6 +136,7 @@ export function Settings({ user: currentUser }) {
         (u.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
         (u.username || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
+    const usersPagination = usePagination(filteredUsers, { resetKeys: [searchTerm, activeTab] });
 
     const tabs = [
         { id: 'account', label: 'Tài khoản', icon: User },
@@ -156,7 +159,7 @@ export function Settings({ user: currentUser }) {
             <div className="flex items-center justify-between gap-4">
                 <div>
                     <h2 className="text-2xl font-black text-gray-800">Cài đặt hệ thống</h2>
-                    <p className="text-sm text-gray-400">Cấu hình các thông số vận hành và quản lý tài khoản</p>
+                    <p className="text-sm text-gray-400">Tài khoản và quản lý người dùng</p>
                 </div>
                 {saved && (
                     <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-full text-xs font-bold border border-emerald-100 animate-slide-up">
@@ -204,7 +207,7 @@ export function Settings({ user: currentUser }) {
                                         </div>
                                         <div className="space-y-1">
                                             <h4 className="font-bold text-gray-700">{settings.name}</h4>
-                                            <p className="text-sm text-gray-400 font-medium">{currentUser?.role === 'admin' ? 'Quản trị viên' : 'Giáo viên'}</p>
+                                            <p className="text-sm text-gray-400 font-medium">{isAdmin ? 'Admin' : 'Giáo viên'}</p>
                                         </div>
                                     </div>
 
@@ -265,6 +268,10 @@ export function Settings({ user: currentUser }) {
                                     <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 whitespace-nowrap">
                                         <Users size={20} className="text-indigo-500" /> Quản lý Người dùng
                                     </h3>
+                                    <div className="flex items-center gap-2 text-sm text-gray-500 md:mr-auto">
+                                        <span className="bg-indigo-50 text-indigo-700 font-semibold px-2 py-0.5 rounded-md">{filteredUsers.length}</span>
+                                        người dùng
+                                    </div>
                                     <div className="relative flex-1 max-w-md">
                                         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                                         <input 
@@ -286,7 +293,7 @@ export function Settings({ user: currentUser }) {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50 bg-white">
-                                            {filteredUsers.map(u => (
+                                            {usersPagination.pageItems.map(u => (
                                                 <tr key={u.id} className={`hover:bg-slate-50/50 transition-colors ${!u.isActive ? 'opacity-60 grayscale-[0.5]' : ''}`}>
                                                     <td className="px-6 py-4">
                                                         <div className="flex items-center gap-3">
@@ -329,6 +336,7 @@ export function Settings({ user: currentUser }) {
                                         </tbody>
                                     </table>
                                 </div>
+                                <Pagination {...usersPagination} onPageChange={usersPagination.setPage} onPageSizeChange={usersPagination.setPageSize} />
                             </div>
                         </div>
                     )}

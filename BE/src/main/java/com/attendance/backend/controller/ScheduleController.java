@@ -27,7 +27,12 @@ public class ScheduleController {
 
     @GetMapping
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public ResponseEntity<List<ScheduleDTO>> getAll(org.springframework.security.core.Authentication authentication) {
+    public ResponseEntity<?> getAll(org.springframework.security.core.Authentication authentication,
+                                    @RequestParam(required = false) Integer page,
+                                    @RequestParam(required = false) Integer limit,
+                                    @RequestParam(required = false, defaultValue = "") String search,
+                                    @RequestParam(required = false) Long semesterId) {
+        boolean wantsPage = page != null || limit != null;
         boolean isAdmin = authentication.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ADMIN"));
         
@@ -41,10 +46,19 @@ public class ScheduleController {
                 String profileId = teacherRepository.findByUsernameOrId(username)
                         .map(com.attendance.backend.entity.Teacher::getId).orElse(username);
                 if (!profileId.equals(username)) {
+                    if (wantsPage) {
+                        return ResponseEntity.ok(scheduleService.getSchedulesByTeacherPage(profileId, search, semesterId, page, limit));
+                    }
                     schedules = scheduleService.getByTeacher(profileId);
                 }
             }
+            if (wantsPage) {
+                return ResponseEntity.ok(scheduleService.getSchedulesByTeacherPage(username, search, semesterId, page, limit));
+            }
             return ResponseEntity.ok(schedules);
+        }
+        if (wantsPage) {
+            return ResponseEntity.ok(scheduleService.getSchedulesPage(search, semesterId, page, limit));
         }
         return ResponseEntity.ok(scheduleService.getAllSchedules());
     }

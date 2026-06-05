@@ -1,8 +1,12 @@
 package com.attendance.backend.service;
 
+import com.attendance.backend.dto.PaginatedResponse;
 import com.attendance.backend.entity.Location;
 import com.attendance.backend.repository.LocationRepository;
 import com.attendance.backend.repository.ScheduleRepository;
+import com.attendance.backend.utils.PaginationUtils;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -21,6 +25,11 @@ public class LocationService {
 
     public List<Location> getAllLocations() {
         return locationRepository.findAll();
+    }
+
+    public PaginatedResponse<Location> getLocationsPage(String search, Integer page, Integer limit) {
+        Pageable pageable = PaginationUtils.toPageable(page, limit, Sort.by("id").ascending());
+        return PaginationUtils.fromPage(locationRepository.search(search, pageable));
     }
 
     public List<Location> getActiveLocations() {

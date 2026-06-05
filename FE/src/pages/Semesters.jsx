@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 import { Calendar, Check, Edit2, Trash2, Loader2 } from 'lucide-react';
+import { Pagination } from '../components/common/Pagination';
+import { usePagination } from '../hooks/usePagination';
 
 export function Semesters() {
     const [semesters, setSemesters] = useState([]);
@@ -9,6 +11,7 @@ export function Semesters() {
     const [editingId, setEditingId] = useState(null);
     const [form, setForm] = useState({ name: '', startDate: '', endDate: '' });
     const [saving, setSaving] = useState(false);
+    const pagination = usePagination(semesters);
 
     useEffect(() => {
         fetchSemesters();
@@ -167,7 +170,7 @@ export function Semesters() {
                                         Chưa có học kỳ nào. Nhấn "+ Thêm học kỳ" để bắt đầu.
                                     </td>
                                 </tr>
-                            ) : semesters.map(sem => (
+                            ) : pagination.pageItems.map(sem => (
                                 <tr key={sem.id} className="hover:bg-slate-50/50 transition-colors">
                                     <td className="px-6 py-4 font-bold text-gray-700">{sem.name}</td>
                                     <td className="px-6 py-4 text-gray-500">{sem.startDate}</td>
@@ -215,6 +218,7 @@ export function Semesters() {
                         </tbody>
                     </table>
                 </div>
+                <Pagination {...pagination} onPageChange={pagination.setPage} onPageSizeChange={pagination.setPageSize} />
             </div>
         </div>
     );

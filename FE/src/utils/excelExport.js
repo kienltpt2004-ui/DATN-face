@@ -4,6 +4,7 @@ const STATUS_LABEL = {
     present: 'Có mặt',
     absent: 'Vắng',
     late: 'Muộn',
+    half: 'Nửa buổi',
 };
 
 // Hàm tự động tính toán độ rộng cột dựa trên nội dung
@@ -52,7 +53,7 @@ export function exportSemesterReportExcel({ className, semesterName, totalSessio
         const absent = sr.filter(r => r.status === 'absent').length;
         const late = sr.filter(r => r.status === 'late').length;
         const half = sr.filter(r => r.status === 'half').length;
-        const score = present + late + (half * 0.5);
+        const score = present + (late * 0.75) + (half * 0.5);
         const rate = totalSessions ? Math.round((score / totalSessions) * 100) : 0;
         return { ...s, present, absent, late, half, rate };
     });
@@ -100,8 +101,11 @@ export function exportAttendanceRangeExcel({ className, fromDate, toDate, studen
         // Thêm tổng hợp cuối dòng
         const studentRecords = records.filter(r => r.studentId === s.id);
         row['Vắng'] = studentRecords.filter(r => r.status === 'absent').length;
+        const present = studentRecords.filter(r => r.status === 'present').length;
+        const late = studentRecords.filter(r => r.status === 'late').length;
+        const half = studentRecords.filter(r => r.status === 'half').length;
         row['% Chuyên cần'] = dates.length > 0 
-            ? Math.round(((studentRecords.filter(r => r.status === 'present' || r.status === 'late').length) / dates.length) * 100) + '%'
+            ? Math.round(((present + late * 0.75 + half * 0.5) / dates.length) * 100) + '%'
             : '0%';
 
         return row;

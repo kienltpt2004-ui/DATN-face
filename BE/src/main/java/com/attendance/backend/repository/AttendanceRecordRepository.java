@@ -20,6 +20,9 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
     @Query("SELECT a FROM AttendanceRecord a WHERE LOWER(TRIM(a.classId)) = LOWER(TRIM(:classId)) AND a.date BETWEEN :from AND :to")
     List<AttendanceRecord> findValidRecordsByClassAndDateRange(@Param("classId") String classId, @Param("from") LocalDate from, @Param("to") LocalDate to);
 
+    @Query("SELECT a FROM AttendanceRecord a WHERE LOWER(TRIM(a.classId)) = LOWER(TRIM(:classId)) AND a.date BETWEEN :from AND :to AND a.scheduleId IS NULL")
+    List<AttendanceRecord> findMissingScheduleRecordsByClassAndDateRange(@Param("classId") String classId, @Param("from") LocalDate from, @Param("to") LocalDate to);
+
     @Query("SELECT a FROM AttendanceRecord a WHERE LOWER(TRIM(a.classId)) = LOWER(TRIM(:classId)) AND a.date BETWEEN :from AND :to AND a.scheduleId IN :scheduleIds")
     List<AttendanceRecord> findByClassAndDateRangeAndScheduleIds(@Param("classId") String classId, @Param("from") LocalDate from, @Param("to") LocalDate to, @Param("scheduleIds") List<String> scheduleIds);
 

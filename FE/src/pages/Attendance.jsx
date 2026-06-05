@@ -33,12 +33,14 @@ export function Attendance({ user }) {
     const [selectedDate, setSelectedDate]     = useState(todayStr);
     const [classStudents, setClassStudents]   = useState([]);
     const [attendance, setAttendance]         = useState({});
+    const [originalAttendance, setOriginalAttendance] = useState({});
     const [attendanceMeta, setAttendanceMeta] = useState({});
     const [loading, setLoading]               = useState(false);
     const [saved, setSaved]                   = useState(false);
     const [hasSchedule, setHasSchedule]       = useState(true);
     const [isWithinTime, setIsWithinTime]     = useState(true);
     const [scheduleInfo, setScheduleInfo]     = useState('');
+    const [selectedScheduleId, setSelectedScheduleId] = useState('');
     const [classEnded, setClassEnded]         = useState(false);
 
     // Refs để timer callback luôn đọc được giá trị mới nhất của state
@@ -47,6 +49,7 @@ export function Attendance({ user }) {
     const studentsRef      = useRef([]);
     const selectedClassRef = useRef('');
     const selectedDateRef  = useRef('');
+    const selectedScheduleRef = useRef('');
     const endTimerRef      = useRef(null);
     const autoSavedRef     = useRef(false);
 
@@ -55,9 +58,22 @@ export function Attendance({ user }) {
     useEffect(() => { studentsRef.current      = classStudents;  }, [classStudents]);
     useEffect(() => { selectedClassRef.current = selectedClass;  }, [selectedClass]);
     useEffect(() => { selectedDateRef.current  = selectedDate;   }, [selectedDate]);
+    useEffect(() => { selectedScheduleRef.current = selectedScheduleId; }, [selectedScheduleId]);
 
     // Dọn dẹp timer khi component unmount
     useEffect(() => () => { if (endTimerRef.current) clearTimeout(endTimerRef.current); }, []);
+
+    const pickScheduleId = (schedules, currentMinutes = null) => {
+        if (!schedules?.length) return '';
+        if (schedules.length === 1) return schedules[0].id;
+        const minutes = currentMinutes ?? (new Date().getHours() * 60 + new Date().getMinutes());
+        const active = schedules.find(s => {
+            const [sh, sm] = s.startTime.split(':').map(Number);
+            const [eh, em] = s.endTime.split(':').map(Number);
+            return minutes >= sh * 60 + sm - 30 && minutes <= eh * 60 + em + 30;
+        });
+        return (active || schedules[0]).id;
+    };
 
     const loadSemesterStats = async (semId) => {
         if (!semId) return;
@@ -90,9 +106,10 @@ export function Attendance({ user }) {
 
                 const studentStats = students.map(sv => {
                     const svRecords = records.filter(r => r.studentId === sv.id);
-                    const present = svRecords.filter(r => ['present','late'].includes(r.status?.toLowerCase())).length;
+                    const present = svRecords.filter(r => r.status?.toLowerCase() === 'present').length;
+                    const late    = svRecords.filter(r => r.status?.toLowerCase() === 'late').length;
                     const half    = svRecords.filter(r => r.status?.toLowerCase() === 'half').length;
-                    const attended = present + half * 0.5;
+                    const attended = present + late * 0.75 + half * 0.5;
                     const total    = totalSessions || svRecords.length;
                     const pct      = total > 0 ? Math.round((attended / total) * 100) : null;
                     return { ...sv, attended, total, pct, eligible: pct !== null ? pct >= 70 : null };
@@ -151,6 +168,7 @@ export function Attendance({ user }) {
         const meta      = metaRef.current;
         const classId   = selectedClassRef.current;
         const date      = selectedDateRef.current;
+        const scheduleId = selectedScheduleRef.current;
 
         const finalMap = {};
         students.forEach(s => {
@@ -162,7 +180,7 @@ export function Attendance({ user }) {
         if (Object.keys(finalMap).length === 0) { setSaved(true); return; }
 
         try {
-            await api.post('/attendance/bulk', { date, classId, attendanceMap: finalMap });
+            await api.post('/attendance/bulk', { date, classId, scheduleId, attendanceMap: finalMap });
             setSaved(true);
         } catch (e) {
             console.error('Auto-save thất bại:', e);
@@ -178,6 +196,7 @@ export function Attendance({ user }) {
         setLoading(true);
         setClassStudents([]);
         setAttendance({});
+        setOriginalAttendance({});
         setAttendanceMeta({});
 
         try {
@@ -193,10 +212,14 @@ export function Attendance({ user }) {
 
             const classSchedule = schedulesRes.filter(s => s.classId === selectedClass && s.dayOfWeek === dayStr);
             setHasSchedule(classSchedule.length > 0);
+            let currentScheduleId = '';
 
             if (classSchedule.length > 0) {
                 const now            = new Date();
                 const currentMinutes = now.getHours() * 60 + now.getMinutes();
+                currentScheduleId = pickScheduleId(classSchedule, currentMinutes);
+                setSelectedScheduleId(currentScheduleId);
+                selectedScheduleRef.current = currentScheduleId;
 
                 // Tính giờ kết thúc muộn nhất trong ngày
                 const maxEndMin = Math.max(...classSchedule.map(s => {
@@ -223,6 +246,7 @@ export function Attendance({ user }) {
                         await api.post('/attendance/bulk', {
                             date: selectedDate,
                             classId: selectedClass,
+                            scheduleId: currentScheduleId,
                             attendanceMap: finalMap
                         }).catch(e => console.error('Auto-save thất bại:', e));
                     }
@@ -246,6 +270,8 @@ export function Attendance({ user }) {
             } else {
                 setIsWithinTime(false);
                 setScheduleInfo('');
+                setSelectedScheduleId('');
+                selectedScheduleRef.current = '';
             }
 
             setClassStudents(studentsRes);
@@ -263,6 +289,7 @@ export function Attendance({ user }) {
             });
 
             setAttendance(records);
+            setOriginalAttendance(records);
             setAttendanceMeta(meta);
 
             const allSaved = studentsRes.length > 0 &&
@@ -295,8 +322,10 @@ export function Attendance({ user }) {
         try {
             const finalAttendance = {};
             classStudents.forEach(s => {
-                if (attendanceMeta[s.id]?.method !== 'face_id') {
-                    finalAttendance[s.id] = attendance[s.id] || 'absent';
+                const currentStatus = attendance[s.id] || 'absent';
+                const originalStatus = originalAttendance[s.id] || 'absent';
+                if (attendanceMeta[s.id]?.method !== 'face_id' && currentStatus !== originalStatus) {
+                    finalAttendance[s.id] = currentStatus;
                 }
             });
 
@@ -304,10 +333,12 @@ export function Attendance({ user }) {
                 await api.post('/attendance/bulk', {
                     date: selectedDate,
                     classId: selectedClass,
+                    scheduleId: selectedScheduleId,
                     attendanceMap: finalAttendance
                 });
             }
             setSaved(true);
+            setOriginalAttendance(attendance);
         } catch (error) {
             alert('Lỗi khi lưu điểm danh: ' + error.message);
         } finally {

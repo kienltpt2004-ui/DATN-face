@@ -19,7 +19,12 @@ public class UserController {
 
     @GetMapping
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<java.util.List<com.attendance.backend.entity.User>> getAll() {
+    public ResponseEntity<?> getAll(@RequestParam(required = false) Integer page,
+                                    @RequestParam(required = false) Integer limit,
+                                    @RequestParam(required = false, defaultValue = "") String search) {
+        if (page != null || limit != null) {
+            return ResponseEntity.ok(userService.getUsersPage(search, page, limit));
+        }
         return ResponseEntity.ok(userService.getAllUsers());
     }
 

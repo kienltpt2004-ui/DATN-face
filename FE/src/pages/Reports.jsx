@@ -14,6 +14,7 @@ function AttendanceBadge({ status }) {
 
 export function Reports({ user }) {
     const isTeacher = user?.role?.toLowerCase() === 'teacher';
+    const currentTeacherId = user?.id || user?.username;
     const [classes, setClasses] = useState([]);
     const [filterClass, setFilterClass] = useState('');
     const [semesters, setSemesters] = useState([]);
@@ -35,9 +36,9 @@ export function Reports({ user }) {
         if (filterClass) {
             fetchReportData();
             fetchClassSchedules();
-            setActiveView('combined');
+            setActiveView(isTeacher ? currentTeacherId : 'combined');
         }
-    }, [filterClass, fromDate, toDate, selectedSemesterId]);
+    }, [filterClass, fromDate, toDate, selectedSemesterId, isTeacher, currentTeacherId]);
 
     const fetchInitialData = async () => {
         try {
@@ -90,7 +91,7 @@ export function Reports({ user }) {
         try {
             const [studentsRes, recordsRes] = await Promise.all([
                 api.get(`/students/class/${filterClass}`),
-                api.get(`/attendance/class/${filterClass}/combined-report?from=${fromDate}&to=${toDate}`)
+                api.get(`/attendance/class/${filterClass}/${isTeacher ? 'report' : 'combined-report'}?from=${fromDate}&to=${toDate}`)
             ]);
             setStudents(studentsRes);
             setRecords(recordsRes);
@@ -111,7 +112,7 @@ export function Reports({ user }) {
         });
     }, [classSchedules]);
 
-    const isMultiTeacher = teacherGroups.length > 1;
+    const isMultiTeacher = !isTeacher && teacherGroups.length > 1;
 
     // All unique dates (combined)
     const uniqueDates = useMemo(() => {
@@ -121,12 +122,13 @@ export function Reports({ user }) {
 
     // Records for the active view
     const activeRecords = useMemo(() => {
+        if (isTeacher) return records;
         if (activeView === 'combined') return records;
         const teacherScheduleIds = classSchedules
             .filter(s => s.teacherId === activeView)
             .map(s => s.id);
         return records.filter(r => teacherScheduleIds.includes(r.scheduleId));
-    }, [activeView, records, classSchedules]);
+    }, [isTeacher, activeView, records, classSchedules]);
 
     // Unique dates for active view
     const activeUniqueDates = useMemo(() => {
@@ -139,6 +141,10 @@ export function Reports({ user }) {
 
     // Sessions count denominator for active view
     const activeTotalSessions = useMemo(() => {
+        if (isTeacher) {
+            const teacherSessionsCount = classSchedules.reduce((sum, s) => sum + (s.sessionsCount || 0), 0);
+            return teacherSessionsCount || activeUniqueDates.length;
+        }
         if (activeView === 'combined') {
             return (selectedSemesterId && selectedClass?.totalSessions)
                 ? selectedClass.totalSessions
@@ -149,7 +155,7 @@ export function Reports({ user }) {
             .filter(s => s.teacherId === activeView)
             .reduce((sum, s) => sum + (s.sessionsCount || 0), 0);
         return teacherSessionsCount || activeUniqueDates.length;
-    }, [activeView, selectedSemesterId, selectedClass, uniqueDates, classSchedules, activeUniqueDates]);
+    }, [isTeacher, activeView, selectedSemesterId, selectedClass, uniqueDates, classSchedules, activeUniqueDates]);
 
     // Summary for active view
     const summary = useMemo(() => {
@@ -159,7 +165,7 @@ export function Reports({ user }) {
             const absent = studentRecords.filter(r => r.status.toLowerCase() === 'absent').length;
             const late = studentRecords.filter(r => r.status.toLowerCase() === 'late').length;
             const half = studentRecords.filter(r => r.status.toLowerCase() === 'half').length;
-            const score = present + late + (half * 0.5);
+            const score = present + (late * 0.75) + (half * 0.5);
             const rate = activeTotalSessions ? Math.round((score / activeTotalSessions) * 100) : 0;
             return { ...s, present, absent, late, half, total: activeTotalSessions, rate };
         });
@@ -175,7 +181,7 @@ export function Reports({ user }) {
         students.forEach(s => {
             const sr = records.filter(r => r.studentId === s.id);
             const score = sr.filter(r => r.status.toLowerCase() === 'present').length
-                + sr.filter(r => r.status.toLowerCase() === 'late').length
+                + sr.filter(r => r.status.toLowerCase() === 'late').length * 0.75
                 + sr.filter(r => r.status.toLowerCase() === 'half').length * 0.5;
             map[s.id] = totalForRate ? Math.round((score / totalForRate) * 100) : 0;
         });
@@ -188,7 +194,7 @@ export function Reports({ user }) {
             semesterName: selectedSemester?.name || '',
             totalSessions: activeTotalSessions,
             students,
-            records,
+            records: activeRecords,
             summary,
         });
     };
@@ -199,7 +205,7 @@ export function Reports({ user }) {
             semesterName: selectedSemester?.name || '',
             totalSessions: activeTotalSessions,
             students,
-            records,
+            records: activeRecords,
             summary,
         });
     };
@@ -424,6 +430,7 @@ export function Reports({ user }) {
                                                         {activeView === 'combined' && (
                                                             <>
                                                                 {isPerfect && <span className="text-[9px] font-black text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full mt-1 border border-teal-100">CHUYÊN CẦN</span>}
+                                                                {isEligible && <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full mt-1 border border-emerald-100">ĐẠT</span>}
                                                                 {isBanned && <span className="text-[9px] font-black text-red-500 bg-red-50 px-2 py-0.5 rounded-full mt-1 border border-red-100">CẤM THI</span>}
                                                                 {isWarning && <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full mt-1 border border-amber-100">CẢNH BÁO</span>}
                                                             </>
@@ -437,6 +444,7 @@ export function Reports({ user }) {
                                                                 {combinedRate}%
                                                             </span>
                                                             {isPerfect && <span className="text-[9px] font-black text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full mt-1 border border-teal-100">CHUYÊN CẦN</span>}
+                                                            {isEligible && <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full mt-1 border border-emerald-100">ĐẠT</span>}
                                                             {isBanned && <span className="text-[9px] font-black text-red-500 bg-red-50 px-2 py-0.5 rounded-full mt-1 border border-red-100">CẤM THI</span>}
                                                             {isWarning && <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full mt-1 border border-amber-100">CẢNH BÁO</span>}
                                                         </div>

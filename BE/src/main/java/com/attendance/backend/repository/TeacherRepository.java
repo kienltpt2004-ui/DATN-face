@@ -1,6 +1,8 @@
 package com.attendance.backend.repository;
 
 import com.attendance.backend.entity.Teacher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -18,4 +20,14 @@ public interface TeacherRepository extends JpaRepository<Teacher, String> {
 
     boolean existsByEmail(String email);
     boolean existsByPhone(String phone);
+
+    @org.springframework.data.jpa.repository.Query("""
+            SELECT t FROM Teacher t
+            WHERE :search IS NULL OR :search = ''
+               OR LOWER(t.id) LIKE LOWER(CONCAT('%', :search, '%'))
+               OR LOWER(t.name) LIKE LOWER(CONCAT('%', :search, '%'))
+               OR LOWER(COALESCE(t.email, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+               OR LOWER(COALESCE(t.phone, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+            """)
+    Page<Teacher> search(@org.springframework.data.repository.query.Param("search") String search, Pageable pageable);
 }

@@ -3,6 +3,8 @@ import { api } from '../utils/api';
 import { Plus, Search, Edit2, Trash2, MapPin, Navigation, X, Check, Activity, Target, Globe } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { Pagination } from '../components/common/Pagination';
+import { usePagination } from '../hooks/usePagination';
 
 // Fix default icon path issue with Vite/Webpack bundlers
 delete L.Icon.Default.prototype._getIconUrl;
@@ -40,6 +42,7 @@ export function Locations() {
         (l.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (l.address || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
+    const pagination = usePagination(filtered, { resetKeys: [searchTerm] });
 
     const handleSave = async (e) => {
         e.preventDefault();
@@ -138,7 +141,7 @@ export function Locations() {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {filtered.map(loc => (
+                    {pagination.pageItems.map(loc => (
                         <div key={loc.id} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 relative group overflow-hidden">
                             <div className="flex justify-between items-start relative z-10">
                                 <div className="flex items-center gap-4">
@@ -185,6 +188,9 @@ export function Locations() {
                     ))}
                 </div>
             )}
+            <div className="card p-0 overflow-hidden">
+                <Pagination {...pagination} onPageChange={pagination.setPage} onPageSizeChange={pagination.setPageSize} />
+            </div>
 
             {showModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
@@ -316,4 +322,3 @@ function MapPicker({ lat, lng, radius, onChange }) {
 
     return <div ref={containerRef} style={{ height: '100%', width: '100%' }} />;
 }
-

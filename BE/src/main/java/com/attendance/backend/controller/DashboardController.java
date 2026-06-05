@@ -43,9 +43,13 @@ public class DashboardController {
             stats.put("totalStudents", studentRepository.count());
             stats.put("totalClasses", classRoomRepository.count());
             
-            stats.put("todayPresent", attendanceRepository.countByDateAndStatus(today, AttendanceRecord.AttendanceStatus.present));
+            long present = attendanceRepository.countByDateAndStatus(today, AttendanceRecord.AttendanceStatus.present);
+            long late = attendanceRepository.countByDateAndStatus(today, AttendanceRecord.AttendanceStatus.late);
+            long half = attendanceRepository.countByDateAndStatus(today, AttendanceRecord.AttendanceStatus.half);
+            stats.put("todayPresent", present + late + half);
             stats.put("todayAbsent", attendanceRepository.countByDateAndStatus(today, AttendanceRecord.AttendanceStatus.absent));
-            stats.put("todayLate", attendanceRepository.countByDateAndStatus(today, AttendanceRecord.AttendanceStatus.late));
+            stats.put("todayLate", late);
+            stats.put("todayHalf", half);
             stats.put("todayTotal", attendanceRepository.countByDate(today));
         } else {
             // Logic cho Giáo viên: Username chính là mã giáo viên (GV001)
@@ -64,24 +68,25 @@ public class DashboardController {
             
             // Điểm danh hôm nay của các lớp có lịch dạy hôm nay
             String dayOfWeekStr = getVietnameseDayOfWeek(today.getDayOfWeek().getValue());
-            List<String> scheduledToday = scheduleRepository.findByTeacherIdIgnoreCase(teacherId).stream()
+            List<com.attendance.backend.entity.Schedule> scheduledToday = scheduleRepository.findByTeacherIdIgnoreCase(teacherId).stream()
                     .filter(s -> s.getDayOfWeek().equalsIgnoreCase(dayOfWeekStr))
-                    .map(com.attendance.backend.entity.Schedule::getClassId)
-                    .distinct()
                     .toList();
 
-            long present = 0, absent = 0, late = 0, total = 0;
-            for (String cid : scheduledToday) {
-                List<AttendanceRecord> daily = attendanceRepository.findByClassIdAndDateBetween(cid, today, today);
+            long present = 0, absent = 0, late = 0, half = 0, total = 0;
+            for (com.attendance.backend.entity.Schedule schedule : scheduledToday) {
+                List<AttendanceRecord> daily = attendanceRepository.findValidRecordsByClassAndDateAndScheduleIds(
+                        schedule.getClassId(), today, List.of(schedule.getId()));
                 present += daily.stream().filter(r -> r.getStatus() == AttendanceRecord.AttendanceStatus.present).count();
                 absent  += daily.stream().filter(r -> r.getStatus() == AttendanceRecord.AttendanceStatus.absent).count();
                 late    += daily.stream().filter(r -> r.getStatus() == AttendanceRecord.AttendanceStatus.late).count();
+                half    += daily.stream().filter(r -> r.getStatus() == AttendanceRecord.AttendanceStatus.half).count();
                 total   += daily.size();
             }
             
-            stats.put("todayPresent", present + late);
+            stats.put("todayPresent", present + late + half);
             stats.put("todayAbsent", absent);
             stats.put("todayLate", late);
+            stats.put("todayHalf", half);
             stats.put("todayTotal", total);
         }
         
@@ -105,27 +110,33 @@ public class DashboardController {
             // Nếu không có lịch dạy vào ngày này, bỏ qua không hiển thị trên biểu đồ
             if (!hasSchedule) continue;
 
-            long dayTotal = 0, dayPresent = 0;
+            long dayTotal = 0;
+            double dayPresent = 0.0;
             if (isAdmin) {
                 dayTotal = attendanceRepository.countByDate(date);
-                dayPresent = attendanceRepository.countByDateAndStatus(date, AttendanceRecord.AttendanceStatus.present) 
-                                + attendanceRepository.countByDateAndStatus(date, AttendanceRecord.AttendanceStatus.late);
+                dayPresent = attendanceRepository.countByDateAndStatus(date, AttendanceRecord.AttendanceStatus.present)
+                                + attendanceRepository.countByDateAndStatus(date, AttendanceRecord.AttendanceStatus.late) * 0.75
+                                + attendanceRepository.countByDateAndStatus(date, AttendanceRecord.AttendanceStatus.half) * 0.5;
             } else {
                 String teacherId = authentication.getName();
-                List<String> classIds = scheduleRepository.findByTeacherIdIgnoreCase(teacherId).stream()
+                List<com.attendance.backend.entity.Schedule> schedules = scheduleRepository.findByTeacherIdIgnoreCase(teacherId).stream()
                         .filter(s -> s.getDayOfWeek().equalsIgnoreCase(dayOfWeekStr))
-                        .map(com.attendance.backend.entity.Schedule::getClassId)
-                        .distinct()
                         .toList();
                 
-                for (String cid : classIds) {
-                    List<AttendanceRecord> daily = attendanceRepository.findByClassIdAndDateBetween(cid, date, date);
+                for (com.attendance.backend.entity.Schedule schedule : schedules) {
+                    List<AttendanceRecord> daily = attendanceRepository.findValidRecordsByClassAndDateAndScheduleIds(
+                            schedule.getClassId(), date, List.of(schedule.getId()));
                     dayTotal += daily.size();
-                    dayPresent += daily.stream().filter(r -> r.getStatus() != AttendanceRecord.AttendanceStatus.absent).count();
+                    dayPresent += daily.stream().mapToDouble(r -> {
+                        if (r.getStatus() == AttendanceRecord.AttendanceStatus.present) return 1.0;
+                        if (r.getStatus() == AttendanceRecord.AttendanceStatus.late) return 0.75;
+                        if (r.getStatus() == AttendanceRecord.AttendanceStatus.half) return 0.5;
+                        return 0.0;
+                    }).sum();
                 }
             }
             
-            int rate = dayTotal > 0 ? (int) Math.round(((double) dayPresent / dayTotal) * 100) : 0;
+            int rate = dayTotal > 0 ? (int) Math.round((dayPresent / dayTotal) * 100) : 0;
             
             Map<String, Object> dayMap = new HashMap<>();
             dayMap.put("date", date.toString());

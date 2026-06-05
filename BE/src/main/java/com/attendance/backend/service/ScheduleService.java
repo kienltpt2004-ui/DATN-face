@@ -1,5 +1,6 @@
 package com.attendance.backend.service;
 
+import com.attendance.backend.dto.PaginatedResponse;
 import com.attendance.backend.dto.ScheduleDTO;
 import com.attendance.backend.entity.ClassRoom;
 import com.attendance.backend.entity.Schedule;
@@ -7,7 +8,10 @@ import com.attendance.backend.exception.ResourceNotFoundException;
 import com.attendance.backend.repository.ClassRoomRepository;
 import com.attendance.backend.repository.ScheduleRepository;
 import com.attendance.backend.repository.TeacherRepository;
+import com.attendance.backend.utils.PaginationUtils;
 import com.attendance.backend.utils.TimeUtils;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +35,16 @@ public class ScheduleService {
     public List<ScheduleDTO> getAllSchedules() {
         return scheduleRepository.findAll().stream()
                 .map(this::toDTO).toList();
+    }
+
+    public PaginatedResponse<ScheduleDTO> getSchedulesPage(String search, Long semesterId, Integer page, Integer limit) {
+        Pageable pageable = PaginationUtils.toPageable(page, limit, Sort.by("dayOfWeek").ascending().and(Sort.by("startTime").ascending()));
+        return PaginationUtils.fromPage(scheduleRepository.search(search, semesterId, pageable).map(this::toDTO));
+    }
+
+    public PaginatedResponse<ScheduleDTO> getSchedulesByTeacherPage(String teacherId, String search, Long semesterId, Integer page, Integer limit) {
+        Pageable pageable = PaginationUtils.toPageable(page, limit, Sort.by("dayOfWeek").ascending().and(Sort.by("startTime").ascending()));
+        return PaginationUtils.fromPage(scheduleRepository.searchByTeacher(teacherId, search, semesterId, pageable).map(this::toDTO));
     }
 
     public List<ScheduleDTO> getByClass(String classId) {
@@ -178,6 +192,41 @@ public class ScheduleService {
             }
 
             // Cho phép: khác lớp + khác giảng viên + khác phòng → OK dù cùng khung giờ
+        }
+
+        validateSessionsAllocation(excludeId, dto, allSchedules);
+    }
+
+    private void validateSessionsAllocation(String excludeId, ScheduleDTO dto, List<Schedule> allSchedules) {
+        int currentSessions = dto.getSessionsCount() != null ? dto.getSessionsCount() : 0;
+        if (currentSessions < 0) {
+            throw new RuntimeException("Số buổi phụ trách không được âm");
+        }
+
+        ClassRoom classRoom = classRoomRepository.findById(dto.getClassId())
+                .orElseThrow(() -> new RuntimeException("Học phần '" + dto.getClassId() + "' không tồn tại trong hệ thống"));
+        Integer totalSessions = classRoom.getTotalSessions();
+        if (totalSessions == null || totalSessions <= 0) return;
+
+        int allocatedSessions = allSchedules.stream()
+                .filter(s -> !s.getId().equals(excludeId) && !s.getId().equals(dto.getId()))
+                .filter(s -> s.getClassId() != null && s.getClassId().equalsIgnoreCase(dto.getClassId()))
+                .filter(s -> {
+                    Long dtoSem = dto.getSemesterId();
+                    Long sSem = s.getSemesterId();
+                    if (dtoSem == null) return sSem == null;
+                    return dtoSem.equals(sSem);
+                })
+                .mapToInt(s -> s.getSessionsCount() != null ? s.getSessionsCount() : 0)
+                .sum();
+
+        int totalAllocated = allocatedSessions + currentSessions;
+        if (totalAllocated > totalSessions) {
+            throw new RuntimeException(
+                    "Tổng số buổi trong lịch dạy của học phần " + dto.getClassId()
+                            + " đang là " + totalAllocated + " buổi, vượt quá tổng số buổi học phần là "
+                            + totalSessions + ". Vui lòng chia lại số buổi cho các lịch dùng chung học phần này."
+            );
         }
     }
 

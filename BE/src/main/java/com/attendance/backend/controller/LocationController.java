@@ -19,7 +19,12 @@ public class LocationController {
     }
 
     @GetMapping
-    public List<Location> getAllLocations() {
+    public Object getAllLocations(@RequestParam(required = false) Integer page,
+                                  @RequestParam(required = false) Integer limit,
+                                  @RequestParam(required = false, defaultValue = "") String search) {
+        if (page != null || limit != null) {
+            return locationService.getLocationsPage(search, page, limit);
+        }
         return locationService.getAllLocations();
     }
 

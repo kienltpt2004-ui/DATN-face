@@ -21,7 +21,12 @@ public class TeacherController {
     }
 
     @GetMapping
-    public ResponseEntity<List<TeacherDTO>> getAll() {
+    public ResponseEntity<?> getAll(@RequestParam(required = false) Integer page,
+                                    @RequestParam(required = false) Integer limit,
+                                    @RequestParam(required = false, defaultValue = "") String search) {
+        if (page != null || limit != null) {
+            return ResponseEntity.ok(teacherService.getTeachersPage(search, page, limit));
+        }
         return ResponseEntity.ok(teacherService.getAllTeachers());
     }
 

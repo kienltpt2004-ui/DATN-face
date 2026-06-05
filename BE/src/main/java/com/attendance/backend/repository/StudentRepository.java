@@ -1,6 +1,8 @@
 package com.attendance.backend.repository;
 
 import com.attendance.backend.entity.Student;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -39,6 +41,53 @@ public interface StudentRepository extends JpaRepository<Student, String> {
 
     @Query("SELECT DISTINCT s FROM Student s LEFT JOIN FETCH s.classes")
     List<Student> findAllWithClasses();
+
+    @Query(
+            value = """
+                    SELECT DISTINCT s FROM Student s
+                    LEFT JOIN FETCH s.classes c
+                    WHERE :search IS NULL OR :search = ''
+                       OR LOWER(s.id) LIKE LOWER(CONCAT('%', :search, '%'))
+                       OR LOWER(s.name) LIKE LOWER(CONCAT('%', :search, '%'))
+                       OR LOWER(COALESCE(s.email, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                       OR LOWER(COALESCE(s.phone, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                    """,
+            countQuery = """
+                    SELECT COUNT(DISTINCT s) FROM Student s
+                    WHERE :search IS NULL OR :search = ''
+                       OR LOWER(s.id) LIKE LOWER(CONCAT('%', :search, '%'))
+                       OR LOWER(s.name) LIKE LOWER(CONCAT('%', :search, '%'))
+                       OR LOWER(COALESCE(s.email, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                       OR LOWER(COALESCE(s.phone, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                    """
+    )
+    Page<Student> searchAllWithClasses(@Param("search") String search, Pageable pageable);
+
+    @Query(
+            value = """
+                    SELECT DISTINCT s FROM Student s
+                    JOIN FETCH s.classes c
+                    WHERE c.id IN :classIds
+                      AND (:search IS NULL OR :search = ''
+                       OR LOWER(s.id) LIKE LOWER(CONCAT('%', :search, '%'))
+                       OR LOWER(s.name) LIKE LOWER(CONCAT('%', :search, '%'))
+                       OR LOWER(COALESCE(s.email, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                       OR LOWER(COALESCE(s.phone, '')) LIKE LOWER(CONCAT('%', :search, '%')))
+                    """,
+            countQuery = """
+                    SELECT COUNT(DISTINCT s) FROM Student s
+                    JOIN s.classes c
+                    WHERE c.id IN :classIds
+                      AND (:search IS NULL OR :search = ''
+                       OR LOWER(s.id) LIKE LOWER(CONCAT('%', :search, '%'))
+                       OR LOWER(s.name) LIKE LOWER(CONCAT('%', :search, '%'))
+                       OR LOWER(COALESCE(s.email, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                       OR LOWER(COALESCE(s.phone, '')) LIKE LOWER(CONCAT('%', :search, '%')))
+                    """
+    )
+    Page<Student> searchByClassIdsWithClasses(@Param("classIds") java.util.List<String> classIds,
+                                              @Param("search") String search,
+                                              Pageable pageable);
 
     @Query("SELECT s FROM Student s WHERE s.faceEmbedding IS NOT NULL AND s.faceEmbedding != ''")
     List<Student> findAllWithFaceEmbedding();

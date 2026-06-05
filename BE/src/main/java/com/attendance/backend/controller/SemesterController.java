@@ -20,7 +20,12 @@ public class SemesterController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Semester>> getAll() {
+    public ResponseEntity<?> getAll(@RequestParam(required = false) Integer page,
+                                    @RequestParam(required = false) Integer limit,
+                                    @RequestParam(required = false, defaultValue = "") String search) {
+        if (page != null || limit != null) {
+            return ResponseEntity.ok(semesterService.getSemestersPage(search, page, limit));
+        }
         return ResponseEntity.ok(semesterService.getAllSemesters());
     }
 

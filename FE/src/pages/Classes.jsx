@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 import { Plus, Search, Edit2, Trash2, Users, BookOpen, X, Check, Upload } from 'lucide-react';
 import { parseExcel } from '../utils/excelImport';
+import { Pagination } from '../components/common/Pagination';
+import { usePagination } from '../hooks/usePagination';
 
 export function Classes() {
     const [classList, setClassList] = useState([]);
@@ -41,6 +43,7 @@ export function Classes() {
         c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.id.toLowerCase().includes(searchTerm.toLowerCase())
     );
+    const pagination = usePagination(filtered, { resetKeys: [searchTerm] });
 
     const handleDelete = async (id) => {
         if (window.confirm('Bạn có chắc chắn muốn xóa học phần này?')) {
@@ -160,7 +163,7 @@ export function Classes() {
                         <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
                     </div>
                 )}
-                {filtered.map((cls) => (
+                {pagination.pageItems.map((cls) => (
                     <div key={cls.id} className="card hover:border-indigo-200 transition-all group overflow-hidden">
                         <div className="flex justify-between items-start mb-4">
                             <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-inner">
@@ -220,6 +223,9 @@ export function Classes() {
                 {!loading && filtered.length === 0 && (
                     <div className="col-span-full p-12 text-center text-gray-400 italic">Không tìm thấy học phần nào.</div>
                 )}
+            </div>
+            <div className="card p-0 overflow-hidden">
+                <Pagination {...pagination} onPageChange={pagination.setPage} onPageSizeChange={pagination.setPageSize} />
             </div>
 
             {showModal && (

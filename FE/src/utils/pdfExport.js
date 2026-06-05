@@ -30,6 +30,7 @@ const STATUS_LABEL = {
     present: 'Có mặt',
     absent: 'Vắng',
     late: 'Muộn',
+    half: 'Nửa buổi',
 };
 
 const TABLE_STYLES = {
@@ -59,14 +60,15 @@ export function exportAttendancePDF({ className, fromDate, toDate, students, dat
         const present = studentRecords.filter(r => r.status === 'present').length;
         const absent = studentRecords.filter(r => r.status === 'absent').length;
         const late = studentRecords.filter(r => r.status === 'late').length;
+        const half = studentRecords.filter(r => r.status === 'half').length;
         const total = studentRecords.length || 1;
-        const rate = Math.round(((present + late) / total) * 100);
-        return [i + 1, s.name, present, absent, late, `${rate}%`];
+        const rate = Math.round(((present + late * 0.75 + half * 0.5) / total) * 100);
+        return [i + 1, s.name, present, absent, late, half, `${rate}%`];
     });
 
     autoTable(doc, {
         startY: 34,
-        head: [['STT', 'Học sinh', 'Có mặt', 'Vắng', 'Muộn', 'Tỷ lệ (%)']],
+        head: [['STT', 'Học sinh', 'Có mặt', 'Vắng', 'Muộn', 'Nửa buổi', 'Tỷ lệ (%)']],
         body: summaryBody,
         ...TABLE_STYLES,
         columnStyles: {
@@ -74,7 +76,8 @@ export function exportAttendancePDF({ className, fromDate, toDate, students, dat
             2: { halign: 'center' },
             3: { halign: 'center' },
             4: { halign: 'center' },
-            5: { halign: 'center', fontStyle: 'bold' },
+            5: { halign: 'center' },
+            6: { halign: 'center', fontStyle: 'bold' },
         },
     });
 
@@ -88,7 +91,7 @@ export function exportAttendancePDF({ className, fromDate, toDate, students, dat
             const row = [i + 1, s.name];
             dates.forEach(date => {
                 const rec = records.find(r => r.studentId === s.id && r.date === date);
-                row.push(rec?.status === 'present' ? 'P' : rec?.status === 'absent' ? 'V' : rec?.status === 'late' ? 'M' : '-');
+                row.push(rec?.status === 'present' ? 'P' : rec?.status === 'absent' ? 'V' : rec?.status === 'late' ? 'M' : rec?.status === 'half' ? '1/2' : '-');
             });
             return row;
         });
@@ -109,6 +112,7 @@ export function exportAttendancePDF({ className, fromDate, toDate, students, dat
                     if (val === 'P') data.cell.styles.textColor = [22, 163, 74];
                     else if (val === 'V') data.cell.styles.textColor = [220, 38, 38];
                     else if (val === 'M') data.cell.styles.textColor = [234, 88, 12];
+                    else if (val === '1/2') data.cell.styles.textColor = [99, 102, 241];
                 }
             },
         });
@@ -187,6 +191,7 @@ export function exportDailyAttendancePDF({ className, date, students, attendance
                 if (val === 'Có mặt') data.cell.styles.textColor = [22, 163, 74];
                 else if (val === 'Vắng') data.cell.styles.textColor = [220, 38, 38];
                 else if (val === 'Muộn') data.cell.styles.textColor = [234, 88, 12];
+                else if (val === 'Nửa buổi') data.cell.styles.textColor = [99, 102, 241];
             }
         }
     });
@@ -221,7 +226,7 @@ export function exportSemesterReportPDF({ className, semesterName, totalSessions
         const absent = sr.filter(r => r.status === 'absent').length;
         const late = sr.filter(r => r.status === 'late').length;
         const half = sr.filter(r => r.status === 'half').length;
-        const score = present + late + (half * 0.5);
+        const score = present + (late * 0.75) + (half * 0.5);
         const rate = totalSessions ? Math.round((score / totalSessions) * 100) : 0;
         return { ...s, present, absent, late, half, rate };
     });

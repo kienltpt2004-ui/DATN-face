@@ -1,5 +1,6 @@
 package com.attendance.backend.service;
 
+import com.attendance.backend.dto.PaginatedResponse;
 import com.attendance.backend.dto.StudentDTO;
 import com.attendance.backend.entity.ClassRoom;
 import com.attendance.backend.entity.Student;
@@ -9,6 +10,9 @@ import com.attendance.backend.repository.AttendanceRecordRepository;
 import com.attendance.backend.repository.ClassRoomRepository;
 import com.attendance.backend.repository.StudentRepository;
 import com.attendance.backend.repository.UserRepository;
+import com.attendance.backend.utils.PaginationUtils;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +51,18 @@ public class StudentService {
         return studentRepository.findAllWithClasses().stream()
                 .map(this::toDTO)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PaginatedResponse<StudentDTO> getStudentsPage(String search, Integer page, Integer limit) {
+        Pageable pageable = PaginationUtils.toPageable(page, limit, Sort.by("id").ascending());
+        return PaginationUtils.fromPage(studentRepository.searchAllWithClasses(search, pageable).map(this::toDTO));
+    }
+
+    @Transactional(readOnly = true)
+    public PaginatedResponse<StudentDTO> getStudentsByClassesPage(List<String> classIds, String search, Integer page, Integer limit) {
+        Pageable pageable = PaginationUtils.toPageable(page, limit, Sort.by("id").ascending());
+        return PaginationUtils.fromPage(studentRepository.searchByClassIdsWithClasses(classIds, search, pageable).map(this::toDTO));
     }
 
     @Transactional(readOnly = true)

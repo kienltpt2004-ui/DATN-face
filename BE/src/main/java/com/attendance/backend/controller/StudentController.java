@@ -44,7 +44,11 @@ public class StudentController {
     }
 
     @GetMapping
-    public ResponseEntity<List<StudentDTO>> getAll(org.springframework.security.core.Authentication authentication) {
+    public ResponseEntity<?> getAll(org.springframework.security.core.Authentication authentication,
+                                    @RequestParam(required = false) Integer page,
+                                    @RequestParam(required = false) Integer limit,
+                                    @RequestParam(required = false, defaultValue = "") String search) {
+        boolean wantsPage = page != null || limit != null;
         boolean isAdmin = authentication.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ADMIN"));
         boolean isTeacher = authentication.getAuthorities().stream()
@@ -67,6 +71,10 @@ public class StudentController {
 
             if (classIds.isEmpty()) return ResponseEntity.ok(Collections.emptyList());
 
+            if (wantsPage) {
+                return ResponseEntity.ok(studentService.getStudentsByClassesPage(classIds, search, page, limit));
+            }
+
             // Bước 1: tìm qua bảng student_classes (enrollment chính thức)
             List<StudentDTO> teacherStudents = studentService.getStudentsByClasses(classIds);
 
@@ -79,6 +87,9 @@ public class StudentController {
             return ResponseEntity.ok(teacherStudents);
         }
 
+        if (wantsPage) {
+            return ResponseEntity.ok(studentService.getStudentsPage(search, page, limit));
+        }
         return ResponseEntity.ok(studentService.getAllStudents());
     }
 

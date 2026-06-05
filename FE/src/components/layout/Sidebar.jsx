@@ -47,13 +47,20 @@ export function Sidebar({ currentPage, onNavigate, onLogout, user }) {
     return (
         <div className="w-64 min-h-screen flex flex-col bg-gradient-to-b from-indigo-700 to-indigo-900 shadow-xl">
             {/* Logo */}
-            <div className="flex items-center gap-3 px-6 py-6 border-b border-white/10">
-                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                    <GraduationCap className="text-white" size={22} />
+            <div className="px-5 py-5 border-b border-white/10">
+                <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 shrink-0 bg-white/20 rounded-xl flex items-center justify-center">
+                        <GraduationCap className="text-white" size={23} />
+                    </div>
+                    <div className="min-w-0">
+                        <h1 className="text-white font-black text-xl leading-tight tracking-tight">Attendance AI</h1>
+                        <p className="text-indigo-200 text-[11px] font-semibold uppercase tracking-wide leading-4"></p>
+                    </div>
                 </div>
-                <div>
-                    <h1 className="text-white font-bold text-lg leading-tight">Attendance AI</h1>
-                    <p className="text-indigo-300 text-xs">Quản lý điểm danh</p>
+                <div className="mt-4 rounded-xl bg-white/10 px-3 py-2">
+                    <p className="text-indigo-50 text-[11px] uppercase tracking-wide leading-4">
+                        Hệ thống điểm danh và quản lý sinh viên Ứng dụng nhận dạng khuôn mặt
+                    </p>
                 </div>
             </div>
 

@@ -41,7 +41,7 @@ public class AttendanceRecord {
     private LocalDate date;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 10)
+    @Column(nullable = false, length = 20, columnDefinition = "varchar(20)")
     private AttendanceStatus status;
 
     /** Giờ điểm danh thực tế */

@@ -1,8 +1,12 @@
 package com.attendance.backend.service;
 
+import com.attendance.backend.dto.PaginatedResponse;
 import com.attendance.backend.entity.Semester;
 import com.attendance.backend.exception.ResourceNotFoundException;
 import com.attendance.backend.repository.SemesterRepository;
+import com.attendance.backend.utils.PaginationUtils;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +23,11 @@ public class SemesterService {
 
     public List<Semester> getAllSemesters() {
         return semesterRepository.findAll();
+    }
+
+    public PaginatedResponse<Semester> getSemestersPage(String search, Integer page, Integer limit) {
+        Pageable pageable = PaginationUtils.toPageable(page, limit, Sort.by("startDate").descending());
+        return PaginationUtils.fromPage(semesterRepository.search(search, pageable));
     }
 
     public Semester getById(Long id) {
