@@ -14,7 +14,7 @@ import {
 
 const ALL_MENU_ITEMS = [
     { id: 'dashboard', label: 'Tổng quan', icon: LayoutDashboard, roles: ['admin', 'teacher'] },
-    { id: 'students', label: 'Học sinh', icon: GraduationCap, roles: ['admin', 'teacher'] },
+    { id: 'students', label: 'Sinh viên', icon: GraduationCap, roles: ['admin', 'teacher'] },
     { id: 'teachers', label: 'Giáo viên', icon: Users, roles: ['admin'] },
     { id: 'classes', label: 'Quản lý Học phần', icon: BookOpen, roles: ['admin'] },
     { id: 'semesters', label: 'Quản lý Học kỳ', icon: CalendarDays, roles: ['admin'] },

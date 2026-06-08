@@ -6,13 +6,11 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.provider.MediaStore;
-import android.view.View;
 // import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ImageView;
 // import android.widget.Spinner;
 import android.widget.TextView;
-import android.widget.Toast;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.IntentSender;
@@ -81,12 +79,12 @@ public class AttendanceActivity extends AppCompatActivity {
 
         btnAttendance.setOnClickListener(v -> {
             if (bitmap == null) {
-                Toast.makeText(this, "Chưa chụp ảnh", Toast.LENGTH_SHORT).show();
+                showFullMessage("Chưa chụp ảnh");
                 return;
             }
 
             if (activeSchedule == null) {
-                Toast.makeText(this, "Không có môn học đang mở", Toast.LENGTH_SHORT).show();
+                showFullMessage("Không có môn học đang mở");
                 return;
             }
 
@@ -100,7 +98,7 @@ public class AttendanceActivity extends AppCompatActivity {
 
     @SuppressLint("MissingPermission")
     private void requestLocationAndSend(String base64, String scheduleId) {
-        Toast.makeText(this, "Đang lấy vị trí GPS...", Toast.LENGTH_SHORT).show();
+        showFullMessage("Đang lấy vị trí GPS...");
 
         // Dùng getCurrentLocation để lấy vị trí HIỆN TẠI, không phải cache cũ
         com.google.android.gms.location.CurrentLocationRequest locationRequest =
@@ -117,15 +115,15 @@ public class AttendanceActivity extends AppCompatActivity {
                     if (location != null) {
                         lat = location.getLatitude();
                         lng = location.getLongitude();
-                        Toast.makeText(this, "GPS: " + String.format("%.5f, %.5f", lat, lng), Toast.LENGTH_SHORT).show();
+                        showFullMessage("GPS: " + String.format("%.5f, %.5f", lat, lng));
                     } else {
-                        Toast.makeText(this, "Không lấy được vị trí GPS, sẽ thử điểm danh không có GPS", Toast.LENGTH_SHORT).show();
+                        showFullMessage("Không lấy được vị trí GPS, sẽ thử điểm danh không có GPS");
                     }
 
                     sendAttendance(base64, scheduleId, lat, lng);
                 })
                 .addOnFailureListener(this, e -> {
-                    Toast.makeText(this, "Lỗi lấy GPS: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    showFullMessage("Lỗi lấy GPS: " + e.getMessage());
                     sendAttendance(base64, scheduleId, null, null);
                 });
     }
@@ -142,8 +140,7 @@ public class AttendanceActivity extends AppCompatActivity {
                     if (data != null && data.getStudentName() != null) {
                         msg += "\n" + data.getStudentName();
                     }
-                    Toast.makeText(AttendanceActivity.this, msg, Toast.LENGTH_LONG).show();
-                    finish();
+                    showFullMessageAndFinish(msg);
                 } else {
                     String errorMsg = "Lỗi hệ thống";
                     try {
@@ -174,13 +171,24 @@ public class AttendanceActivity extends AppCompatActivity {
                 .make(findViewById(android.R.id.content), message, Snackbar.LENGTH_LONG)
                 .setAction("Đóng", v -> {});
 
-        View snackbarView = snackbar.getView();
-        TextView snackbarText = snackbarView.findViewById(com.google.android.material.R.id.snackbar_text);
-        snackbarText.setSingleLine(false);
-        snackbarText.setMaxLines(Integer.MAX_VALUE);
-        snackbarText.setEllipsize(null);
-
+        snackbar.setTextMaxLines(Integer.MAX_VALUE);
         snackbar.setDuration(6000);
+        snackbar.show();
+    }
+
+    private void showFullMessageAndFinish(String message) {
+        Snackbar snackbar = Snackbar
+                .make(findViewById(android.R.id.content), message, Snackbar.LENGTH_LONG)
+                .setAction("Đóng", v -> finish());
+
+        snackbar.setTextMaxLines(Integer.MAX_VALUE);
+        snackbar.setDuration(3000);
+        snackbar.addCallback(new Snackbar.Callback() {
+            @Override
+            public void onDismissed(Snackbar transientBottomBar, int event) {
+                finish();
+            }
+        });
         snackbar.show();
     }
 
@@ -264,7 +272,7 @@ public class AttendanceActivity extends AppCompatActivity {
                 tvActiveSubject.setText("Lỗi kết nối");
                 tvActiveTime.setText(t.getMessage());
                 btnAttendance.setEnabled(false);
-                Toast.makeText(AttendanceActivity.this, "Lỗi tải lịch học: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                showFullMessage("Lỗi tải lịch học: " + t.getMessage());
             }
         });
     }
@@ -294,19 +302,19 @@ public class AttendanceActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == CAMERA_REQUEST && resultCode == Activity.RESULT_OK) {
             if (data == null || data.getExtras() == null) {
-                Toast.makeText(this, "Không lấy được ảnh từ camera", Toast.LENGTH_SHORT).show();
+                showFullMessage("Không lấy được ảnh từ camera");
                 return;
             }
             Bitmap captured = (Bitmap) data.getExtras().get("data");
             if (captured == null) {
-                Toast.makeText(this, "Ảnh rỗng, vui lòng thử lại", Toast.LENGTH_SHORT).show();
+                showFullMessage("Ảnh rỗng, vui lòng thử lại");
                 return;
             }
             bitmap = captured;
             ImageView imageView = findViewById(R.id.imageView);
             imageView.setImageBitmap(bitmap);
         } else if (requestCode == REQUEST_CHECK_SETTINGS && resultCode == Activity.RESULT_OK) {
-            Toast.makeText(this, "GPS đã được bật", Toast.LENGTH_SHORT).show();
+            showFullMessage("GPS đã được bật");
         }
     }
 }

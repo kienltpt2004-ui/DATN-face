@@ -7,7 +7,6 @@ import android.os.Bundle;
 import android.provider.MediaStore;
 import android.widget.Button;
 import android.widget.ImageView;
-import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -17,6 +16,7 @@ import com.example.cdtn.api.RetrofitClient;
 import com.example.cdtn.model.ApiResponse;
 import com.example.cdtn.model.FaceRequest;
 import com.example.cdtn.utils.ImageUtils;
+import com.google.android.material.snackbar.Snackbar;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -59,7 +59,7 @@ public class RegisterFaceActivity extends AppCompatActivity {
         if (requestCode == 102 && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             openCamera();
         } else {
-            Toast.makeText(this, "Cần cấp quyền camera để chụp ảnh", Toast.LENGTH_SHORT).show();
+            showMessage("Cần cấp quyền camera để chụp ảnh");
         }
     }
 
@@ -76,7 +76,7 @@ public class RegisterFaceActivity extends AppCompatActivity {
     private void registerFace() {
 
         if (bitmap == null) {
-            Toast.makeText(this, "Chưa chụp ảnh", Toast.LENGTH_SHORT).show();
+            showMessage("Chưa chụp ảnh");
             return;
         }
 
@@ -94,10 +94,7 @@ public class RegisterFaceActivity extends AppCompatActivity {
                     public void onResponse(Call<ApiResponse<Object>> call,
                                            Response<ApiResponse<Object>> response) {
                         if (response.isSuccessful()) {
-                            Toast.makeText(RegisterFaceActivity.this,
-                                    "Đăng ký thành công",
-                                    Toast.LENGTH_SHORT).show();
-                            finish();
+                            showMessageAndFinish("Đăng ký thành công");
                         } else {
                             String errorMsg = "Lỗi hệ thống";
                             try {
@@ -108,9 +105,7 @@ public class RegisterFaceActivity extends AppCompatActivity {
                                     }
                                 }
                             } catch (Exception e) {}
-                            Toast.makeText(RegisterFaceActivity.this,
-                                    "Thất bại: " + errorMsg,
-                                    Toast.LENGTH_LONG).show();
+                            showMessage("Thất bại: " + errorMsg);
                         }
                     }
 
@@ -118,11 +113,35 @@ public class RegisterFaceActivity extends AppCompatActivity {
                     public void onFailure(Call<ApiResponse<Object>> call,
                                           Throwable t) {
 
-                        Toast.makeText(RegisterFaceActivity.this,
-                                t.getMessage(),
-                                Toast.LENGTH_SHORT).show();
+                        showMessage(t.getMessage());
                     }
                 });
+    }
+
+    private void showMessage(String message) {
+        Snackbar snackbar = Snackbar
+                .make(findViewById(android.R.id.content), message, Snackbar.LENGTH_LONG)
+                .setAction("Đóng", v -> {});
+
+        snackbar.setTextMaxLines(Integer.MAX_VALUE);
+        snackbar.setDuration(6000);
+        snackbar.show();
+    }
+
+    private void showMessageAndFinish(String message) {
+        Snackbar snackbar = Snackbar
+                .make(findViewById(android.R.id.content), message, Snackbar.LENGTH_LONG)
+                .setAction("Đóng", v -> finish());
+
+        snackbar.setTextMaxLines(Integer.MAX_VALUE);
+        snackbar.setDuration(3000);
+        snackbar.addCallback(new Snackbar.Callback() {
+            @Override
+            public void onDismissed(Snackbar transientBottomBar, int event) {
+                finish();
+            }
+        });
+        snackbar.show();
     }
 
 }

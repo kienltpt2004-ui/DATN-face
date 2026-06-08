@@ -20,6 +20,14 @@ export function Schedules({ user }) {
     const [formData, setFormData] = useState({ id: '', subject: '', classId: '', teacherId: '', dayOfWeek: 'Thứ 2', startTime: '', endTime: '', room: '', locationId: '', semesterId: '', sessionsCount: '' });
     const [showPicker, setShowPicker] = useState({ start: false, end: false });
 
+    const activeSemester = semesters.find(s => s.isActive);
+    const toMinutes = (time = '') => {
+        const [h = '0', m = '0'] = String(time).split(':');
+        return Number(h) * 60 + Number(m);
+    };
+    const sortByStartTime = (items) => [...items].sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
+    const isMorningSchedule = (schedule) => toMinutes(schedule.startTime) < 12 * 60;
+
     useEffect(() => {
         fetchData();
     }, []);
@@ -69,8 +77,10 @@ export function Schedules({ user }) {
 
     const handleSave = async (e) => {
         e.preventDefault();
+        const effectiveSemesterId = activeSemester?.id || formData.semesterId || null;
         const dataToSave = {
             ...formData,
+            semesterId: effectiveSemesterId,
             dayOfWeek: formData.dayOfWeek,
             teacherId: isTeacher ? user.id : formData.teacherId,
             teacherName: teachers.find(t => t.id === (isTeacher ? user.id : formData.teacherId))?.name || user.name
@@ -100,7 +110,7 @@ export function Schedules({ user }) {
             if (editingSchedule && s.id === editingSchedule.id) return false;
 
             // Chỉ kiểm tra xung đột trong cùng học kỳ
-            const dtoSem = formData.semesterId ? String(formData.semesterId) : null;
+            const dtoSem = effectiveSemesterId ? String(effectiveSemesterId) : null;
             const sSem = s.semesterId ? String(s.semesterId) : null;
             if (dtoSem && dtoSem !== sSem) return false;
             if (!dtoSem && sSem) return false;
@@ -158,7 +168,8 @@ export function Schedules({ user }) {
         setFormData({
             ...s,
             dayOfWeek: s.dayOfWeek,
-            locationId: s.locationId || ''
+            locationId: s.locationId || '',
+            semesterId: activeSemester?.id || s.semesterId || null
         });
         setShowModal(true);
     };
@@ -201,7 +212,6 @@ export function Schedules({ user }) {
                             const nextNum = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
                             const autoId = 'SCH-' + nextNum;
                             setEditingSchedule(null);
-                            const activeSem = semesters.find(s => s.isActive);
                             setFormData({
                                 id: autoId,
                                 subject: '',
@@ -212,7 +222,7 @@ export function Schedules({ user }) {
                                 endTime: '',
                                 room: '',
                                 locationId: locations[0]?.id || '',
-                                semesterId: activeSem ? activeSem.id : null,
+                                semesterId: activeSemester ? activeSemester.id : null,
                                 sessionsCount: '',
                             });
                             setShowModal(true); 
@@ -238,6 +248,20 @@ export function Schedules({ user }) {
                         return vnDay === day;
                     });
                     if (daySchedules.length === 0) return null;
+                    const sessionGroups = [
+                        {
+                            key: 'morning',
+                            title: 'Buổi sáng',
+                            color: 'text-amber-500',
+                            items: sortByStartTime(daySchedules.filter(isMorningSchedule)),
+                        },
+                        {
+                            key: 'afternoon',
+                            title: 'Buổi chiều',
+                            color: 'text-sky-500',
+                            items: sortByStartTime(daySchedules.filter(s => !isMorningSchedule(s))),
+                        },
+                    ].filter(group => group.items.length > 0);
 
                     return (
                         <div key={day} className="space-y-3">
@@ -245,8 +269,15 @@ export function Schedules({ user }) {
                                 <Calendar size={18} className="text-indigo-500" />
                                 {day}
                             </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {daySchedules.map(sch => (
+                            <div className="space-y-4">
+                                {sessionGroups.map(group => (
+                                    <div key={`${day}-${group.key}`} className="space-y-2">
+                                        <div className="flex items-center gap-2 px-1 text-xs font-black uppercase tracking-wider text-gray-500">
+                                            <Clock size={14} className={group.color} />
+                                            {group.title}
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {group.items.map(sch => (
                                     <div key={sch.id} className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100 hover:border-indigo-200 transition-all group relative">
                                         <div className="flex justify-between items-start mb-3">
                                             <div className="flex items-center gap-2">
@@ -304,6 +335,9 @@ export function Schedules({ user }) {
                                                     </span>
                                                 )}
                                             </div>
+                                        </div>
+                                    </div>
+                                            ))}
                                         </div>
                                     </div>
                                 ))}
@@ -416,7 +450,7 @@ export function Schedules({ user }) {
 
                                 <div>
                                     <label className="block text-sm font-bold text-gray-600 mb-2">Học kỳ</label>
-                                    <select className="input" value={formData.semesterId || ''} onChange={e => setFormData({ ...formData, semesterId: e.target.value ? Number(e.target.value) : null })}>
+                                    <select className="input disabled:bg-gray-50" disabled={!!activeSemester} value={formData.semesterId || ''} onChange={e => setFormData({ ...formData, semesterId: e.target.value ? Number(e.target.value) : null })}>
                                         <option value="">-- Không thuộc kỳ nào --</option>
                                         {semesters.map(s => (
                                             <option key={s.id} value={s.id}>{s.name}{s.isActive ? ' (đang hoạt động)' : ''}</option>
